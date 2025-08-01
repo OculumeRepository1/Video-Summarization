@@ -1,0 +1,7 @@
+Flask
+opencv-python
+requests
+numpy
+redis
+sentence-transformers
+scikit-learn

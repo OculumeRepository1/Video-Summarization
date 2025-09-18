@@ -11,17 +11,27 @@ from sklearn.cluster import DBSCAN
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_distances 
 from flask import send_from_directory
+from video_utils import extract_frames, _compile_kb_regex, classify_incident
+import json
+import tempfile
+import textwrap
+project_dir = os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+with open(os.path.join(project_dir, "Dict.json"), "r", encoding="utf-8") as f:
+    KB = json.load(f)
+    
+
+INCIDENT_KB = _compile_kb_regex(KB)
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv'}
 sentence_model = SentenceTransformer('all-MiniLM-L6-v2', device='cuda', model_kwargs={"torch_dtype": torch.float16})
 dbscan_model = DBSCAN(eps=0.3, min_samples=1, metric='precomputed')
 # --------- LLM 1: TinyVision Placeholder ---------
 # def tinyVision(vmodel,frame,prompt,tokenizer):
 #     enc_image = vmodel.encode_image(frame)
-#     responcse=vmodel.answer_question(enc_image, prompt, tokenizer)
+#     responcse=vx = left_margin + indent_offset if i == 0 else left_marginmodel.answer_question(enc_image, prompt, tokenizer)
 #     return responcse
 
 import cv2
@@ -147,7 +157,7 @@ def ollama_model(prompt,image):
     )
     response_json = res['message']['content']
     return response_json
-def ollama_QA(text):
+def ollama_QA(text,prompt):
     #prompt3="Analyze the description {response}. If any of these conditions are identify. 1: Check for weapons, knife any other kind of weapons. 2: person is smoking, cigerete. 3: Person lying on the floor or person fallen. 4: Violence; if any are present, Just response with 'Yes'or 'No'."
     #image.show()
     #print(prompt3)
@@ -166,19 +176,19 @@ def ollama_QA(text):
     #     Captions:
     #     \"\"\"{text}\"\"\"
     #     """
-    prompt = f"""
-        "Analyze the frame-by-frame descriptions of human activities below. Summarize the continuous activity into a single, cohesive sentence starting with the subject. Captions may contain errors, so ignore captions that are less frequently mentioned in the overall description. Avoid generating unreal or unsure interactions by disregarding any irrelevant information about human activity
+    # prompt = f"""
+    #     "Analyze the frame-by-frame descriptions of human activities below. Summarize the continuous activity into a single, cohesive sentence starting with the subject. Captions may contain errors, so ignore captions that are less frequently mentioned in the overall description. Avoid generating unreal or unsure interactions by disregarding any irrelevant information about human activity
 
-        Captions:
-        \"\"\"{text}\"\"\"
-        """
+    #     Captions:
+    #     \"\"\"{text}\"\"\"
+    #     """
     res=ollama.chat(
         model='gemma3:4b',
         messages=[
         {
             'role':'user',
             'content':prompt,
-            'max_tokens': 800,
+            'max_tokens': 2000,
         }
         ]
     )
@@ -187,7 +197,7 @@ def extract_frames(video_path):
     cap = cv2.VideoCapture(video_path)
     frames = []
     count = 0
-    interval = 120  # Extract every 30th frame
+    interval = 30  # Extract every 30th frame
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
@@ -206,18 +216,86 @@ revision = "2024-08-26"  # Pin to specific version
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
-def save_summary_to_pdf(summary_text, filename="summary.pdf"):
+
+def save_summary_to_pdf(summary_text, filename="summary.pdf", images=None, image_captions=None):
     pdf_path = os.path.join("uploads", filename)
     c = canvas.Canvas(pdf_path, pagesize=letter)
     width, height = letter
-    lines = summary_text.split('\n')
+
+    # Font settings
+    c.setFont("Helvetica", 11)
+
+    # Layout settings
+    left_margin = 40
+    right_margin = 40
+    max_width = width - left_margin - right_margin
+    line_height = 15
     y = height - 50
-    for line in lines:
-        if y < 40:
-            c.showPage()
-            y = height - 50
-        c.drawString(40, y, line[:100])  # avoid overflow
-        y -= 15
+
+    # Indentation settings
+    indent_offset = 20  # pixels
+    avg_char_width = 6  # Approx for Helvetica 11pt
+    max_chars_per_line = int(max_width / avg_char_width)
+
+    # Split into paragraphs
+    paragraphs = summary_text.strip().split('\n')
+
+    # Process text paragraphs first
+    for para in paragraphs:
+        wrapped_lines = textwrap.wrap(para, width=max_chars_per_line)
+        for i, line in enumerate(wrapped_lines):
+            if y < 40:
+                c.showPage()  # Go to the next page
+                c.setFont("Helvetica", 11)
+                y = height - 50
+
+            # Apply indentation only to the first line of the paragraph
+            x = left_margin + indent_offset if i == 0 else left_margin
+            c.drawString(x, y, line)
+            y -= line_height
+
+    # After text, add images with captions at the end
+    if images and image_captions:
+        for i, opencv_image in enumerate(images):
+            # Convert the OpenCV image to a temporary file (e.g., PNG)
+            _, img_file = tempfile.mkstemp(suffix='.png')  # Create a temporary file
+            cv2.imwrite(img_file, opencv_image)  # Save OpenCV image to temp file
+            
+            # Get image size for positioning
+            img_width, img_height = 200, 200  # Default size, can adjust as needed
+            y -= 20  # Space before the image
+
+            # Check if there is space for the image
+            if y - img_height < 40:  # If there isn't enough space, go to the next page
+                c.showPage()
+                c.setFont("Helvetica", 11)
+                y = height - 50
+            
+            # Add the image to the PDF
+            c.drawImage(img_file, left_margin, y - img_height, width=img_width, height=img_height)
+            y -= img_height + 10  # Adjust y-coordinate after the image
+
+            # Get the caption from the dictionary
+            #caption = image_captions.get(i, "Image caption")  # Default caption if index not found
+            # for key, value in image_captions.items():
+            #     caption = value
+            caption = image_captions[i] if i < len(image_captions) else "Image caption"
+            # Wrap the caption text
+            wrapped_caption = textwrap.wrap(caption, width=max_chars_per_line)
+            c.setFont("Helvetica", 9)
+            for line in wrapped_caption:
+                if y < 40:  # If there's no space, go to the next page
+                    c.showPage()
+                    c.setFont("Helvetica", 9)
+                    y = height - 50
+                c.drawString(left_margin, y, line)
+                y -= line_height  # Move down for the next line of caption
+
+            y -= 15  # Space after the caption
+
+            # Clean up the temporary image file
+            os.remove(img_file)
+
     c.save()
     return filename
 
@@ -239,8 +317,24 @@ def download_pdf(filename):
 def index():
     if request.method == "POST":
         file = request.files.get("video")
-        prompt = request.form.get("prompt")
-        prompt="Analyze the image carefully and describe the situation in detail and ignore non violent behavior. Indicate if there are any guns, weapons, knife, or any thing in mouth or smoking gesture or smoking substances or person lying on the floor or person  or fighting stance — but only mention them if you are completely certain, based on clear visual evidence. Do not speculate or fabricate. If a weapon is confidently detected, specify the type of weapon observed. Then, describe: What is happening in the image (the situation) and the actions being taken by individuals.Any visible information about the individuals (e.g., clothing, posture, interaction. Also include time stamp of the image in the description. If you are not sure about any of these, just don't mention it. If you are not sure about any of these, just don't mention it."
+        user_prompt = request.form.get("prompt")
+        if user_prompt is None or user_prompt.strip() == "":
+            prompt=f"""Analyze the human behavior in the image. Is there any indication of violence, gun use, or drug use? 
+
+            Instructions:
+            - Begin your answer with "Yes" or "No".
+            - If the answer is "Yes", describe the situation, detailing any signs of violence, weapons, or drug activity.
+            - If the answer is "No", simply state, "No safety concern detected."
+            - Always start your answer with "Yes" or "No"."""
+        else:
+            prompt=f"""Analyze the human behavior in the image. Is there any indication of violence, gun use, or drug use? 
+
+                Instructions:
+                - Begin your answer with "Yes" or "No".
+                - If the answer is "Yes", describe the situation, detailing any signs of violence, weapons, or drug activity.
+                - If the answer is "No", simply state, "No safety concern detected."
+                - Always start your answer with "Yes" or "No".
+                The user is looking for: {user_prompt}"""
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
@@ -251,22 +345,67 @@ def index():
             if not frames:
                 return render_template("index.html", error="No frames extracted from the video.")
             captioned_frames = {}
+            images_for_pdf = []
+            captions=[]
             for i, frame in enumerate(frames):
                 try:
                     pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
                     success, buffer = cv2.imencode('.jpg', frame)
                     img_base64 = base64.b64encode(buffer).decode('utf-8')
                     caption=ollama_model(prompt, img_base64)
-                    print(f"Frame {i+1} caption: {caption}")
-                    captioned_frames[i] = (caption)
+                    response2=caption[0:3]
+                    # Normalize the answer
+                    #resp_clean = response.strip().lower()
+                    resp_clean = (caption or "").strip()
+                                
+
+                    # ----------- Filtering strategy -----------
+                    labels, top_sev = classify_incident(resp_clean, INCIDENT_KB)
+                    is_yes = resp_clean.startswith("yes")
+                    is_critical = top_sev in ("critical", "high")  # decision comes from KB
+                    #print(f"is_critical={is_critical}")
+                    #print(f"[KB] labels={labels}, top_severity={top_sev}")
+                    print(f"Orginal LLM Response {caption}")
+
+                    # Use both the Gemma "Yes/No" AND the KB classification
+                    first_char = response2[:1]  # safe
+
+                    #print(f'First LLM Response {response1}')
+                    print(f'Second LLM Response {response2}')
+                    #if (top_sev in ("critical", "high")):
+                    if response2[0]=="y" or response2[0]=="Y" or response2[0]=="H":
+                        print(f"Frame {i+1} caption: {caption}")
+                        captioned_frames[i] = (caption)
+                        images_for_pdf.append(frame)
+                        captions.append(caption)
                 except Exception as e:
                     print(f"Error in frame {i}: {e}")
             outputs = clustering_denoise(captioned_frames)
             outputs = ", ".join(f"{key}: '{value}'" for key, value in outputs.items())
-            prompt= f"Generate a high-level summary of the video based on the following frame-by-frame captions and images. Respond only based on visual information and captions provided.\n\nUser Prompt:\n{prompt}\n\nFrame Captions:\n"
+            prompt_s = f"""
+                You are an assistant tasked with summarizing incidents from a video using frame-by-frame image captions and creating a comprehensive report.
+
+                Instructions:
+                - Review the frame captions provided below carefully.
+                - Identify and highlight key incidents or significant events from the frames.
+                - Write a clear, concise paragraph for each identified incident.
+                - Start each paragraph with a **bolded incident title** (e.g., "Knife Found:") followed by a brief narrative. Include the approximate time, a description of the incident, and any relevant context from the frame captions.
+                - After summarizing the incidents, compile the information into a **full, proper report**. Ensure the report is well-structured and cohesive, and provides a clear overview of the incidents.
+                
+                Example:
+                **Knife Found:** At approximately 19:40, a youth arrived at the shelter for supper. During a routine search, staff discovered a knife tucked inside their backpack.
+
+                Now, process the following:
+
+                User Prompt: 
+                {prompt}
+
+                Frame Captions: 
+                {captioned_frames}
+            """
             #summary=''.join([f"Frame {i+1}: {caption}" for i, (caption, _) in enumerate(captioned_frames)])
-            summary = ollama_QA(outputs)
-            pdf_filename = save_summary_to_pdf(summary)
+            summary = ollama_QA(outputs,prompt_s)
+            pdf_filename = save_summary_to_pdf(summary,images=images_for_pdf,image_captions=captions)
             return render_template("index.html", summary=summary, pdf_file=pdf_filename)
         return render_template("index.html", error="Invalid file format")
 

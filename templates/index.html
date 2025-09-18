@@ -34,100 +34,152 @@
   <meta charset="UTF-8">
   <title>Video Summary with Ollama</title>
   <style>
-  body {
-    background-color: #0b1e3b; /* Dark blue */
-    color: #ffffff; /* White text */
-    font-family: Arial, sans-serif;
-    padding: 40px;
-  }
-  .logo-container {
-  position: absolute;
-  top: 20px;
-  right: 30px;
-}
+    body {
+      background-color: #0b1e3b;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+      padding: 40px;
+    }
 
-.logo-container img {
-  height: 80px; /* Adjust size as needed */
-  width: auto;
-}
-  h1, h2 {
-    color: #ffffff;
-  }
+    .logo-container {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+    }
 
-  form {
-    margin-bottom: 30px;
-  }
+    .logo-container img {
+      height: 80px;
+      width: auto;
+    }
 
-  input[type="file"], textarea {
-    width: 100%;
-    padding: 8px;
-    margin-top: 10px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    background-color: #ffffff;
-    color: #000000;
-  }
+    h1, h2 {
+      color: #ffffff;
+    }
 
-  button {
-    padding: 10px 20px;
-    font-size: 16px;
-    background-color: #1f4ea3;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    margin-top: 10px;
-  }
+    form {
+      margin-bottom: 30px;
+    }
 
-  button:hover {
-    background-color: #3a6edb;
-  }
+    label {
+      display: block;
+      margin-top: 15px;
+      font-weight: bold;
+    }
 
-  p {
-    background-color: #112d54;
-    padding: 15px;
-    border-radius: 5px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-  }
+    input[type="file"], textarea {
+      width: 100%;
+      padding: 8px;
+      margin-top: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background-color: #ffffff;
+      color: #000000;
+    }
 
-  .download-btn {
-    margin-top: 15px;
-    display: inline-block;
-    background-color: #25a18e;
-    padding: 10px 15px;
-    color: white;
-    text-decoration: none;
-    border-radius: 5px;
-  }
+    textarea::placeholder {
+      color: #888;
+    }
 
-  .download-btn:hover {
-    background-color: #1e877a;
-  }
-</style>
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #1f4ea3;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 15px;
+    }
+
+    button:hover {
+      background-color: #3a6edb;
+    }
+
+    p {
+      background-color: #112d54;
+      padding: 15px;
+      border-radius: 5px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    .download-btn {
+      margin-top: 15px;
+      display: inline-block;
+      background-color: #25a18e;
+      padding: 10px 15px;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+    }
+
+    .download-btn:hover {
+      background-color: #1e877a;
+    }
+
+    /* Spinner Styles */
+    #loading-spinner {
+      display: none;
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .spinner {
+      border: 6px solid #f3f3f3;
+      border-top: 6px solid #1f4ea3;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .processing-message {
+      font-style: italic;
+      color: #ccc;
+    }
+  </style>
 </head>
 <body>
   <h1>Upload Video for Summary</h1>
-  <form method="POST" enctype="multipart/form-data">
+  <form method="POST" enctype="multipart/form-data" id="upload-form">
+    <label for="video">Choose a video file:</label>
     <input type="file" name="video" accept="video/*" required>
-    <button type="submit">Upload & Summarize</button>
+
+    <label for="prompt">Optional Custom Prompt:</label>
+    <textarea name="prompt" rows="4" placeholder="Enter your custom prompt here..."></textarea>
+
+    <button type="submit" id="submit-button">Upload & Summarize</button>
+
+    <!-- Loading Spinner -->
+    <div id="loading-spinner">
+      <div class="spinner"></div>
+      <div class="processing-message">Processing your video, please wait...</div>
+    </div>
   </form>
+
   <div class="logo-container">
-  <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo">
-</div>
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo">
+  </div>
+
   {% if summary %}
     <h2>📝 Summary:</h2>
     <p>{{ summary }}</p>
     {% if pdf_file %}
-    <a href="{{ url_for('download_pdf', filename=pdf_file) }}" class="download-btn" download>
+      <a href="{{ url_for('download_pdf', filename=pdf_file) }}" class="download-btn" download>
         📄 Download Summary as PDF
-    </a>
+      </a>
     {% endif %}
   {% elif error %}
     <h2 style="color: red;">Error:</h2>
     <p>{{ error }}</p>
   {% else %}
-    <h2>Upload a video to get started!</h2>
+    <p>No summary available yet. Please upload a video to get started.</p>
   {% endif %}
 
   {% if prompt %}
@@ -139,5 +191,13 @@
     <h2>Video URL:</h2>
     <p><a href="{{ video_url }}" target="_blank">{{ video_url }}</a></p>
   {% endif %}
+
+  <!-- JavaScript to handle spinner -->
+  <script>
+    document.getElementById("upload-form").addEventListener("submit", function() {
+      document.getElementById("submit-button").disabled = true;
+      document.getElementById("loading-spinner").style.display = "block";
+    });
+  </script>
 </body>
 </html>

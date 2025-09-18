@@ -1,0 +1,140 @@
+{
+  "weapon_gun": {
+    "synonyms": ["gun", "pistol", "revolver", "rifle", "firearm"],
+    "regex": ["\\bgun\\b", "\\bpistol\\b", "\\brevolver\\b", "\\brifle\\b", "\\bfirearm(s)?\\b"],
+    "severity": "critical",
+    "cooldown_secs": 0
+  },
+  "weapon_knife": {
+    "synonyms": ["knife", "blade", "machete"],
+    "regex": ["\\bknife\\b", "\\bblade\\b", "\\bmachete\\b"],
+    "severity": "critical",
+    "cooldown_secs": 0
+  },
+  "weapon_other": {
+    "synonyms": ["bat", "hammer", "wrench", "metal bar", "pipe"],
+    "regex": ["\\bbat\\b", "\\bhammer\\b", "\\bwrench\\b", "\\b(pipe|metal bar)\\b"],
+    "severity": "critical",
+    "cooldown_secs": 0
+  },
+  "violence": {
+    "synonyms": ["fight", "fighting", "assault", "punch", "kick", "strangle", "choke"],
+    "regex": ["\\bfight(ing)?\\b", "\\bassault\\b", "\\bpunch(ing)?\\b", "\\bkick(ing)?\\b", "\\b(strangle|chok(e|ing))\\b"],
+    "severity": "critical",
+    "cooldown_secs": 0
+  },
+  "smoking_vaping": {
+    "synonyms": ["smoking", "cigarette", "vape", "vaping", "joint"],
+    "regex": ["\\bsmok(ing|e)\\b", "\\bcig(ar|arette)\\b", "\\bvap(e|ing)\\b", "\\bjoint\\b"],
+    "severity": "high",
+    "cooldown_secs": 120
+  },
+  "drugs": {
+    "synonyms": ["drugs", "drug use", "substance"],
+    "regex": ["\\bdrug(s)?\\b", "\\bsubstance(s)?\\b"],
+    "severity": "high",
+    "cooldown_secs": 120
+  },
+  "medical_fall": {
+    "synonyms": ["fallen", "fall", "falls", "falling", "collapse", "collapsed"],
+    "regex": ["\\bfall(en|s|ing)?\\b", "\\bcollaps(e|ed)\\b"],
+    "severity": "critical",
+    "cooldown_secs": 0
+  },
+  "medical_unresponsive": {
+    "synonyms": ["unconscious", "unresponsive", "passed out", "fainted", "not moving"],
+    "regex": ["\\bunconscious\\b", "\\bunresponsive\\b", "\\bpassed out\\b", "\\bfaint(ed|ing)?\\b", "\\bnot moving\\b"],
+    "severity": "critical",
+    "cooldown_secs": 0
+  },
+  "loitering_suspicious": {
+    "synonyms": ["loitering", "suspicious"],
+    "regex": ["\\bloiter(ing)?\\b", "\\bsuspicious\\b"],
+    "severity": "moderate",
+    "cooldown_secs": 300
+  },
+  "suspicious": {
+    "synonyms": ["suspicious"],
+    "regex": ["\\bloiter(ing)?\\b", "\\bsuspicious\\b"],
+    "severity": "moderate",
+    "cooldown_secs": 300
+  },
+  "break_in_trespass": {
+    "synonyms": ["trespass", "trespassing", "break-in", "forced entry", "unauthorized entry", "crowbar", "prying"],
+    "regex": ["\\btrespass(ing)?\\b", "\\bbreak-?in\\b", "\\bforced entry\\b", "\\bunauthorized entry\\b", "\\bcrowbar\\b", "\\bpry(ing)?\\b"],
+    "severity": "high",
+    "cooldown_secs": 0
+  },
+  "property_damage": {
+    "synonyms": ["vandalism", "vandalize", "graffiti", "broken window", "smash", "damaged"],
+    "regex": ["\\bvandal(ism|ize|ized)\\b", "\\b(graffiti|tagging)\\b", "\\bbroken (window|glass|door)\\b", "\\bsmash(ing|ed)?\\b", "\\bdamage(d)?\\b"],
+    "severity": "moderate",
+    "cooldown_secs": 0
+  },
+  "fire_hazard": {
+    "synonyms": ["fire", "flames", "on fire", "burning", "thick smoke", "black smoke"],
+    "regex": ["\\bon fire\\b", "\\bflame(s)?\\b", "\\bburn(ing|s)?\\b", "\\bthick smoke\\b", "\\bblack smoke\\b"],
+    "severity": "critical",
+    "cooldown_secs": 0
+  },
+  "alarm_sprinkler": {
+    "synonyms": ["alarm", "fire alarm", "siren", "strobe", "sprinkler", "extinguisher"],
+    "regex": ["\\bfire alarm\\b", "\\b(alarm|siren|strobe)\\b", "\\bsprinkler(s)?\\b", "\\bextinguisher( discharge)?\\b"],
+    "severity": "high",
+    "cooldown_secs": 0
+  },
+  "vehicle_collision": {
+    "synonyms": ["crash", "collision", "hit by car", "run over", "struck", "car accident"],
+    "regex": ["\\b(crash|collision)\\b", "\\bhit by\\b", "\\brun over\\b", "\\bstruck\\b", "\\bcar accident\\b"],
+    "severity": "critical",
+    "cooldown_secs": 0
+  },
+  "open_alcohol": {
+    "synonyms": ["alcohol", "beer", "wine", "vodka", "liquor", "open container"],
+    "regex": ["\\balcohol\\b", "\\bbeer\\b", "\\bwine\\b", "\\bliquor\\b", "\\bvodka\\b", "\\bopen container\\b"],
+    "severity": "moderate",
+    "cooldown_secs": 300
+  },
+  "face_concealment": {
+    "synonyms": ["balaclava", "ski mask", "face covering", "face concealed", "hood up"],
+    "regex": ["\\bbalaclava\\b", "\\bski mask\\b", "\\bface (covering|concealed)\\b", "\\bhood up\\b"],
+    "severity": "moderate",
+    "cooldown_secs": 300
+  },
+  "child_unattended": {
+    "synonyms": ["child alone", "unattended child", "unsupervised child", "child without adult"],
+    "regex": ["\\b(child|kid) alone\\b", "\\b(unattended|unsupervised) child\\b", "\\bchild without adult\\b"],
+    "severity": "high",
+    "cooldown_secs": 120
+  },
+  "animal_on_site": {
+    "synonyms": ["dog", "animal", "wildlife", "coyote", "bear", "pet"],
+    "regex": ["\\bdog\\b", "\\banimal\\b", "\\b(wildlife|coyote|bear)\\b", "\\bpet\\b"],
+    "severity": "moderate",
+    "cooldown_secs": 300
+  },
+  "camera_tamper": {
+    "synonyms": ["camera covered", "camera blocked", "camera tampered", "lens sprayed", "obscured camera"],
+    "regex": ["\\bcamera (covered|blocked|obscured)\\b", "\\btamper(ed|ing)?\\b", "\\bspray paint(ed)?\\b", "\\bcap on lens\\b"],
+    "severity": "moderate",
+    "cooldown_secs": 300
+  },
+  "crowding_overcapacity": {
+    "synonyms": ["crowd", "crowded", "over capacity", "packed", "large group"],
+    "regex": ["\\bcrowd(ed|ing)?\\b", "\\bover(-| )?capacity\\b", "\\bpacked\\b", "\\blarge group\\b"],
+    "severity": "moderate",
+    "cooldown_secs": 300
+  },
+  "hazard_sharps_spill": {
+    "synonyms": ["needle", "syringe", "sharps", "blood", "biohazard", "chemical spill", "spill"],
+    "regex": ["\\b(needle|syringe)\\b", "\\bsharps\\b", "\\b(blood|biohazard)\\b", "\\bchemical spill\\b", "\\bspill(ed|ing)?\\b"],
+    "severity": "high",
+    "cooldown_secs": 0
+  },
+  "theft": {
+    "synonyms": ["theft", "steal", "stealing", "shoplifting", "grab and run", "pocketed"],
+    "regex": ["\\btheft\\b", "\\bsteal(s|ing|er)?\\b", "\\bshoplift(ing)?\\b", "\\bgrab and run\\b", "\\bpocket(ed|ing)?\\b"],
+    "severity": "high",
+    "cooldown_secs": 0
+  }
+}

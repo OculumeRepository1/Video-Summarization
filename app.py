@@ -2,7 +2,7 @@ import os
 import cv2
 import base64
 from PIL import Image
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, jsonify, abort
 from werkzeug.utils import secure_filename
 import ollama
 import torch
@@ -15,9 +15,12 @@ from video_utils import extract_frames, _compile_kb_regex, classify_incident
 import json
 import tempfile
 import textwrap
+import random
+import uuid
+from collections import OrderedDict
 project_dir = os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['UPLOAD_FOLDER'] = rf'C:\Users\oosma\Desktop\Video_Analysis'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 with open(os.path.join(project_dir, "Dict.json"), "r", encoding="utf-8") as f:
@@ -25,6 +28,34 @@ with open(os.path.join(project_dir, "Dict.json"), "r", encoding="utf-8") as f:
     
 
 INCIDENT_KB = _compile_kb_regex(KB)
+
+# Compact "what to look for" checklist derived from the KB. Injected into
+# the per-frame prompt so the vision model scans for concrete categories
+# instead of generating generic scene descriptions, and so it uses the
+# exact synonyms that classify_incident's regex expects to match.
+KB_CHECKLIST = "\n".join(
+    f"- {label.replace('_', ' ')}: {', '.join(cfg.get('synonyms', [])[:5])}"
+    for label, cfg in KB.items()
+)
+
+# Per-upload session cache so the user can ask follow-up questions about a
+# processed video without re-uploading. Bounded LRU dict — oldest sessions
+# drop off when capacity is exceeded. In-memory only; lost on app restart,
+# which is fine for the prototype.
+ACTIVE_SESSIONS = OrderedDict()
+ACTIVE_SESSIONS_MAX = 20
+
+
+def _store_session(captions_block, context, source_filename):
+    sid = uuid.uuid4().hex
+    ACTIVE_SESSIONS[sid] = {
+        "captions_block": captions_block,
+        "context": context,
+        "source": source_filename,
+    }
+    while len(ACTIVE_SESSIONS) > ACTIVE_SESSIONS_MAX:
+        ACTIVE_SESSIONS.popitem(last=False)
+    return sid
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv'}
 sentence_model = SentenceTransformer('all-MiniLM-L6-v2', device='cuda', model_kwargs={"torch_dtype": torch.float16})
 dbscan_model = DBSCAN(eps=0.3, min_samples=1, metric='precomputed')
@@ -193,8 +224,16 @@ def ollama_QA(text,prompt):
         ]
     )
     return res['message']['content']
+def _format_timestamp(seconds):
+    seconds = max(0, int(seconds))
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
 def extract_frames(video_path):
     cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     frames = []
     count = 0
     interval = 30  # Extract every 30th frame
@@ -203,7 +242,8 @@ def extract_frames(video_path):
         if not ret:
             break
         if count % interval == 0:
-            frames.append(frame)
+            ts = count / fps if fps > 0 else 0.0
+            frames.append((frame, ts))
         count += 1
     cap.release()
     return frames
@@ -216,85 +256,238 @@ revision = "2024-08-26"  # Pin to specific version
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
+import re
 
-def save_summary_to_pdf(summary_text, filename="summary.pdf", images=None, image_captions=None):
-    pdf_path = os.path.join("uploads", filename)
+LOGO_PATH = os.path.join(project_dir, "static", "logo.png")
+
+
+_DISCLAIMER_MARKERS = (
+    r"disclaimer|important note|recommendation[s]?|"
+    r"further investigation|recommendations for further investigation|"
+    r"overall assessment|overall impression|"
+    r"investigative notes?|note for investigation|"
+    r"i am an ai"
+)
+
+
+def _clean_report_text(text):
+    """Strip markdown, model disclaimers, and fake intra-frame timestamps."""
+    if not text:
+        return ""
+    # Drop the leading Y/N flag the per-frame prompt asks for.
+    text = re.sub(r"^\s*[YN]\b[\s\.,;:\-]*", "", text, flags=re.IGNORECASE)
+    # Drop the disclaimer/recommendation tail — once any marker shows up,
+    # everything after it is boilerplate, so cut to end of string.
+    text = re.sub(
+        rf"\b({_DISCLAIMER_MARKERS})\b[\s:\-–—]*.*$",
+        "",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    # Strip invented intra-frame timestamps like "0:00-0:03:" or "0:00 – 0:05:".
+    text = re.sub(r"\b\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}\s*:?\s*", "", text)
+    # Markdown bold/italic, code ticks, headings, list bullets.
+    text = re.sub(r"\*{1,3}", "", text)
+    text = re.sub(r"`+", "", text)
+    text = re.sub(r"^\s{0,3}#{1,6}\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*[-*+]\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"_{2,}", "", text)
+    # Collapse extra whitespace introduced by the substitutions.
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def save_summary_to_pdf(summary_text, images=None, image_captions=None):
+    """
+    image_captions accepts either:
+      - list[str]                       (legacy)
+      - list[{"t": "00:00:05", "text": "..."}]  (with timestamps)
+    images may be a list of OpenCV frames, or a list of (frame, ts_seconds)
+    tuples — the latter lets us sort frame entries chronologically.
+    Saves into app.config['UPLOAD_FOLDER'] so the /download/<file> route can serve it.
+    """
+    random_suffix = random.randint(1000, 9999)
+    filename = f"summary_{random_suffix}.pdf"
+    pdf_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    print(f"Saving summary to PDF: {pdf_path}")
     c = canvas.Canvas(pdf_path, pagesize=letter)
     width, height = letter
 
-    # Font settings
-    c.setFont("Helvetica", 11)
-
-    # Layout settings
+    # Layout
     left_margin = 40
     right_margin = 40
     max_width = width - left_margin - right_margin
     line_height = 15
     y = height - 50
-
-    # Indentation settings
-    indent_offset = 20  # pixels
-    avg_char_width = 6  # Approx for Helvetica 11pt
+    indent_offset = 20
+    avg_char_width = 6
     max_chars_per_line = int(max_width / avg_char_width)
 
-    # Split into paragraphs
-    paragraphs = summary_text.strip().split('\n')
+    def ensure_space(needed, font="Helvetica", size=11):
+        nonlocal y
+        if y - needed < 40:
+            c.showPage()
+            c.setFont(font, size)
+            y = height - 50
 
-    # Process text paragraphs first
-    for para in paragraphs:
-        wrapped_lines = textwrap.wrap(para, width=max_chars_per_line)
+    # ---- Logo ----
+    if os.path.exists(LOGO_PATH):
+        try:
+            logo_w, logo_h = 120, 50
+            c.drawImage(LOGO_PATH, left_margin, y - logo_h,
+                        width=logo_w, height=logo_h,
+                        preserveAspectRatio=True, mask='auto', anchor='nw')
+            y -= logo_h + 36
+        except Exception as e:
+            print(f"Logo render failed: {e}")
+
+    # ---- Heading + summary text ----
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(left_margin, y, "Video Analysis Report")
+    y -= 24
+    c.setFont("Helvetica", 11)
+
+    cleaned_summary = _clean_report_text(summary_text or "")
+    for para in cleaned_summary.split('\n'):
+        para = para.strip()
+        if not para:
+            ensure_space(line_height, "Helvetica", 11)
+            y -= line_height
+            continue
+        wrapped_lines = textwrap.wrap(para, width=max_chars_per_line) or [""]
         for i, line in enumerate(wrapped_lines):
-            if y < 40:
-                c.showPage()  # Go to the next page
-                c.setFont("Helvetica", 11)
-                y = height - 50
-
-            # Apply indentation only to the first line of the paragraph
+            ensure_space(line_height, "Helvetica", 11)
             x = left_margin + indent_offset if i == 0 else left_margin
             c.drawString(x, y, line)
             y -= line_height
 
-    # After text, add images with captions at the end
+    # ---- Per-frame section: timestamp + image + caption ----
     if images and image_captions:
-        for i, opencv_image in enumerate(images):
-            # Convert the OpenCV image to a temporary file (e.g., PNG)
-            _, img_file = tempfile.mkstemp(suffix='.png')  # Create a temporary file
-            cv2.imwrite(img_file, opencv_image)  # Save OpenCV image to temp file
-            
-            # Get image size for positioning
-            img_width, img_height = 200, 200  # Default size, can adjust as needed
-            y -= 20  # Space before the image
+        # Normalize image entries to (frame, ts_seconds) and pair with captions
+        # so we can sort the section chronologically regardless of input order.
+        paired = []
+        for i, img_entry in enumerate(images):
+            cap_entry = image_captions[i] if i < len(image_captions) else {}
+            if isinstance(img_entry, tuple) and len(img_entry) == 2:
+                frame, ts_seconds = img_entry
+            else:
+                frame = img_entry
+                ts_seconds = None
+            if isinstance(cap_entry, dict):
+                if ts_seconds is None:
+                    ts_seconds = cap_entry.get("ts_seconds")
+                ts_label = cap_entry.get("t", "")
+                text = cap_entry.get("text", "")
+                labels = cap_entry.get("labels", []) or []
+                severity = cap_entry.get("severity", "low") or "low"
+            else:
+                ts_label = ""
+                text = str(cap_entry)
+                labels = []
+                severity = "low"
+            sort_key = ts_seconds if ts_seconds is not None else float("inf")
+            paired.append({
+                "sort_key": sort_key,
+                "frame": frame,
+                "ts": ts_label,
+                "text": text,
+                "labels": labels,
+                "severity": severity,
+            })
 
-            # Check if there is space for the image
-            if y - img_height < 40:  # If there isn't enough space, go to the next page
-                c.showPage()
-                c.setFont("Helvetica", 11)
-                y = height - 50
-            
-            # Add the image to the PDF
-            c.drawImage(img_file, left_margin, y - img_height, width=img_width, height=img_height)
-            y -= img_height + 10  # Adjust y-coordinate after the image
+        paired.sort(key=lambda p: p["sort_key"])
 
-            # Get the caption from the dictionary
-            #caption = image_captions.get(i, "Image caption")  # Default caption if index not found
-            # for key, value in image_captions.items():
-            #     caption = value
-            caption = image_captions[i] if i < len(image_captions) else "Image caption"
-            # Wrap the caption text
-            wrapped_caption = textwrap.wrap(caption, width=max_chars_per_line)
-            c.setFont("Helvetica", 9)
-            for line in wrapped_caption:
-                if y < 40:  # If there's no space, go to the next page
-                    c.showPage()
-                    c.setFont("Helvetica", 9)
-                    y = height - 50
+        # ---- Incidents table (critical/high only) ----
+        flagged = [p for p in paired if p["severity"] in ("critical", "high")]
+        if flagged:
+            ensure_space(40, "Helvetica-Bold", 13)
+            y -= 10
+            c.setFont("Helvetica-Bold", 13)
+            c.drawString(left_margin, y, "Incidents")
+            y -= 18
+            ts_col = left_margin
+            sev_col = left_margin + 90
+            inc_col = left_margin + 180
+            c.setFont("Helvetica-Bold", 10)
+            c.drawString(ts_col, y, "Timestamp")
+            c.drawString(sev_col, y, "Severity")
+            c.drawString(inc_col, y, "Findings")
+            y -= 14
+            c.setFont("Helvetica", 10)
+            inc_chars = max(10, int((max_width - (inc_col - left_margin)) / avg_char_width))
+            for p in flagged:
+                labels_str = ", ".join(p["labels"]) if p["labels"] else "(unspecified)"
+                wrapped = textwrap.wrap(labels_str, width=inc_chars) or [labels_str]
+                ensure_space(line_height * len(wrapped), "Helvetica", 10)
+                c.drawString(ts_col, y, p["ts"])
+                c.drawString(sev_col, y, p["severity"].title())
+                c.drawString(inc_col, y, wrapped[0])
+                y -= line_height
+                for cont in wrapped[1:]:
+                    ensure_space(line_height, "Helvetica", 10)
+                    c.drawString(inc_col, y, cont)
+                    y -= line_height
+            y -= 6
+
+        ensure_space(40, "Helvetica-Bold", 13)
+        y -= 10
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(left_margin, y, "Frame-by-frame Findings")
+        y -= 22
+        c.setFont("Helvetica", 11)
+
+        img_w, img_h = 220, 180
+
+        for p in paired:
+            opencv_image = p["frame"]
+            ts = p["ts"]
+            text = _clean_report_text(p["text"])
+
+            # Make space for timestamp + image + 2 caption lines minimum.
+            ensure_space(img_h + 60, "Helvetica", 11)
+
+            # 1) Timestamp (bold)
+            if ts:
+                c.setFont("Helvetica-Bold", 11)
+                c.drawString(left_margin, y, f"Timestamp: {ts}")
+                y -= line_height + 2
+
+            # 2) Image
+            # Workaround: tempfile.mkstemp() holds an OS-level FD open. On
+            # Windows that prevents cv2.imwrite from succeeding, leaving the
+            # PDF with empty image slots. Close the FD immediately.
+            img_file = None
+            try:
+                fd, img_file = tempfile.mkstemp(suffix='.png')
+                os.close(fd)
+                ok = cv2.imwrite(img_file, opencv_image)
+                if ok:
+                    c.drawImage(img_file, left_margin, y - img_h,
+                                width=img_w, height=img_h,
+                                preserveAspectRatio=True, anchor='nw')
+                else:
+                    c.setFont("Helvetica-Oblique", 9)
+                    c.drawString(left_margin, y - 12, "[image could not be encoded]")
+                y -= img_h + 8
+            except Exception as e:
+                c.setFont("Helvetica-Oblique", 9)
+                c.drawString(left_margin, y - 12, f"[image error: {e}]")
+                y -= img_h + 8
+            finally:
+                if img_file and os.path.exists(img_file):
+                    try:
+                        os.remove(img_file)
+                    except OSError:
+                        pass
+
+            # 3) Caption text
+            c.setFont("Helvetica", 10)
+            for line in textwrap.wrap(text or "(no description)", width=max_chars_per_line):
+                ensure_space(line_height, "Helvetica", 10)
                 c.drawString(left_margin, y, line)
-                y -= line_height  # Move down for the next line of caption
-
-            y -= 15  # Space after the caption
-
-            # Clean up the temporary image file
-            os.remove(img_file)
+                y -= line_height
+            y -= 14
 
     c.save()
     return filename
@@ -302,7 +495,417 @@ def save_summary_to_pdf(summary_text, filename="summary.pdf", images=None, image
 
 @app.route('/download/<filename>')
 def download_pdf(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+    filename_di = secure_filename(filename)  # Sanitize the filename
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename_di, as_attachment=True)
+
+
+@app.route("/ask", methods=["POST"])
+def ask_followup():
+    """Answer a follow-up question about a previously-processed video,
+    re-using the cached frame captions for that session — no re-processing."""
+    data = request.get_json(silent=True) or {}
+    sid = (data.get("session_id") or "").strip()
+    question = (data.get("question") or "").strip()
+    if not question:
+        return jsonify({"error": "question is required"}), 400
+    sess = ACTIVE_SESSIONS.get(sid)
+    if not sess:
+        return jsonify({"error": "session expired — re-upload the video"}), 410
+
+    prompt_s = f"""You are a security analyst answering a follow-up question about a surveillance video, using only the timestamped frame observations below.
+
+Question: {question}
+
+Original analysis context: {sess['context']}
+
+Timestamped observations:
+{sess['captions_block']}
+
+Instructions:
+- Answer in 2 to 5 sentences, plain prose.
+- Reference specific timestamps when relevant (e.g. "at 00:00:20").
+- If the observations don't contain enough information to answer, say so plainly.
+- Do not invent details that are not in the observations.
+- No markdown, no disclaimers, no recommendations."""
+
+    try:
+        answer = ollama_QA(sess["captions_block"], prompt_s)
+    except Exception as e:
+        return jsonify({"error": f"model error: {e}"}), 500
+    return jsonify({"answer": _clean_report_text(answer or "")})
+
+
+# --------- Person Tracking (multi-camera Re-ID) ---------
+# Prototype endpoints. Mock data lives in static/tracking_data.json so the UI
+# can be built and demoed without YOLOv8/ByteTrack/Re-ID weights in place.
+# When the real pipeline is wired up (people detection -> tracking ->
+# camera-network matching -> journey reconstruction), replace _load_tracking_data
+# with a call into that module — the JSON shape is the public contract for the
+# 2D floor-plan view and the future Three.js 3D view.
+def _load_tracking_data():
+    path = os.path.join(project_dir, "static", "tracking_data.json")
+    with open(path, "r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+# Per-camera uploaded clip registry. Maps camera_id -> URL (a static path
+# for uploaded files, an http(s) URL for remote feeds, or rtsp:// for live
+# IP cameras — those go through /stream/<camera_id> as MJPEG).
+TRACKING_CLIPS_DIR = os.path.join(project_dir, "static", "tracking_clips")
+TRACKING_CLIPS_REGISTRY_PATH = os.path.join(TRACKING_CLIPS_DIR, "_registry.json")
+os.makedirs(TRACKING_CLIPS_DIR, exist_ok=True)
+ALLOWED_CLIP_EXT = {"mp4", "webm", "mov", "mkv", "avi"}
+
+# Per-floor uploaded floor-plan registry. Maps floor_id -> URL (under /static).
+FLOOR_PLANS_DIR = os.path.join(project_dir, "static", "floor_plans")
+FLOOR_PLANS_REGISTRY_PATH = os.path.join(FLOOR_PLANS_DIR, "_registry.json")
+os.makedirs(FLOOR_PLANS_DIR, exist_ok=True)
+ALLOWED_MAP_EXT = {"svg", "png", "jpg", "jpeg", "webp"}
+DEFAULT_FLOOR_PLAN_URL = "/static/floor_plans/sample.svg"
+
+
+def _load_floor_plan_registry():
+    if not os.path.exists(FLOOR_PLANS_REGISTRY_PATH):
+        return {}
+    try:
+        with open(FLOOR_PLANS_REGISTRY_PATH, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
+
+
+def _save_floor_plan_registry(reg):
+    with open(FLOOR_PLANS_REGISTRY_PATH, "w", encoding="utf-8") as fh:
+        json.dump(reg, fh, indent=2)
+
+
+def _load_clip_registry():
+    if not os.path.exists(TRACKING_CLIPS_REGISTRY_PATH):
+        return {}
+    try:
+        with open(TRACKING_CLIPS_REGISTRY_PATH, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
+
+
+def _save_clip_registry(reg):
+    with open(TRACKING_CLIPS_REGISTRY_PATH, "w", encoding="utf-8") as fh:
+        json.dump(reg, fh, indent=2)
+
+
+@app.route("/api/tracking/building", methods=["GET"])
+def api_tracking_building():
+    """
+    Return the building topology, augmenting each floor with a floor_plan_url
+    (either the user's uploaded image or the default sample SVG so the map
+    is never blank).
+    """
+    building = dict(_load_tracking_data().get("building", {}))
+    plan_reg = _load_floor_plan_registry()
+    floors = []
+    for fl in building.get("floors", []):
+        fl = dict(fl)
+        fl["floor_plan_url"] = plan_reg.get(fl["id"], DEFAULT_FLOOR_PLAN_URL)
+        floors.append(fl)
+    building["floors"] = floors
+    return jsonify(building)
+
+
+@app.route("/api/tracking/floor_plans", methods=["GET"])
+def api_tracking_floor_plans():
+    """Return the floor_id -> uploaded plan URL mapping (excludes defaults)."""
+    return jsonify(_load_floor_plan_registry())
+
+
+@app.route("/api/tracking/upload_map", methods=["POST"])
+def api_tracking_upload_map():
+    """
+    Upload a custom floor plan image. multipart/form-data with:
+      - floor_id  (e.g. '1F')
+      - file      (svg/png/jpg/webp)
+    Saves to static/floor_plans/<floor_id>.<ext> and updates the registry.
+    Pass floor_id='ALL' to apply the same image to every floor.
+    """
+    floor_id = (request.form.get("floor_id") or "").strip()
+    fs = request.files.get("file")
+    if not floor_id or not fs or not fs.filename:
+        return abort(400, description="floor_id and file are required")
+    ext = fs.filename.rsplit(".", 1)[-1].lower() if "." in fs.filename else ""
+    if ext not in ALLOWED_MAP_EXT:
+        return abort(400, description=f"file extension must be one of {sorted(ALLOWED_MAP_EXT)}")
+
+    reg = _load_floor_plan_registry()
+    targets = []
+    if floor_id.upper() == "ALL":
+        for fl in _load_tracking_data().get("building", {}).get("floors", []):
+            targets.append(fl["id"])
+    else:
+        targets.append(floor_id)
+
+    # Save once, alias for each target
+    safe = secure_filename(targets[0])
+    out_name = f"{safe}.{ext}"
+    out_path = os.path.join(FLOOR_PLANS_DIR, out_name)
+    fs.save(out_path)
+    url = f"/static/floor_plans/{out_name}"
+    for t in targets:
+        reg[t] = url
+    _save_floor_plan_registry(reg)
+    return jsonify({"registry": reg, "saved": targets, "url": url})
+
+
+@app.route("/api/tracking/floor_plans/<floor_id>", methods=["DELETE"])
+def api_tracking_floor_plan_delete(floor_id):
+    """Revert a floor back to the default sample plan."""
+    reg = _load_floor_plan_registry()
+    url = reg.pop(floor_id, None)
+    if url and url.startswith("/static/floor_plans/"):
+        fpath = os.path.join(FLOOR_PLANS_DIR, url.rsplit("/", 1)[-1])
+        # Only remove uploaded files, not the bundled sample
+        if os.path.exists(fpath) and os.path.basename(fpath) != "sample.svg":
+            try:
+                os.remove(fpath)
+            except OSError:
+                pass
+    _save_floor_plan_registry(reg)
+    return jsonify({"registry": reg})
+
+
+@app.route("/api/tracking/network", methods=["GET"])
+def api_tracking_network():
+    return jsonify(_load_tracking_data().get("camera_network", {}))
+
+
+@app.route("/api/tracking/gallery", methods=["GET"])
+def api_tracking_gallery():
+    return jsonify(_load_tracking_data().get("gallery", []))
+
+
+@app.route("/api/tracking/zone_counts", methods=["GET"])
+def api_tracking_zone_counts():
+    return jsonify(_load_tracking_data().get("live_zone_counts", {}))
+
+
+@app.route("/api/tracking/clips", methods=["GET"])
+def api_tracking_clips():
+    """Return the current camera_id -> clip_url mapping."""
+    return jsonify(_load_clip_registry())
+
+
+@app.route("/api/tracking/upload_clips", methods=["POST"])
+def api_tracking_upload_clips():
+    """
+    Multi-video upload. The frontend posts a multipart/form-data body where
+    each file field is named clip_<CAMERA_ID> (e.g. clip_Cam7). Files land
+    in static/tracking_clips/<camera_id>.<ext> and a small JSON registry
+    persists the mapping so a page refresh keeps them associated.
+    """
+    saved = {}
+    reg = _load_clip_registry()
+    for field, fs in request.files.items():
+        if not field.startswith("clip_"):
+            continue
+        if not fs or not fs.filename:
+            continue
+        camera_id = field[len("clip_"):]
+        if not camera_id:
+            continue
+        ext = fs.filename.rsplit(".", 1)[-1].lower() if "." in fs.filename else "mp4"
+        if ext not in ALLOWED_CLIP_EXT:
+            continue
+        safe_cam = secure_filename(camera_id)
+        out_name = f"{safe_cam}.{ext}"
+        out_path = os.path.join(TRACKING_CLIPS_DIR, out_name)
+        fs.save(out_path)
+        url = f"/static/tracking_clips/{out_name}"
+        reg[camera_id] = url
+        saved[camera_id] = url
+    _save_clip_registry(reg)
+    return jsonify({"saved": saved, "registry": reg})
+
+
+# Public sample MP4 URLs wired to every camera that appears in any of the
+# demo journeys. Used by /load_demo_feeds so the stitched player works
+# end-to-end without uploading anything.
+_DEMO_FEED_BASE = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/"
+DEMO_FEEDS = {
+    "ENT1":      _DEMO_FEED_BASE + "BigBuckBunny.mp4",
+    "Cam7":      _DEMO_FEED_BASE + "ForBiggerBlazes.mp4",
+    "Cam8":      _DEMO_FEED_BASE + "ForBiggerEscapes.mp4",
+    "Cam9":      _DEMO_FEED_BASE + "ForBiggerFun.mp4",
+    "Cam10":     _DEMO_FEED_BASE + "ForBiggerJoyrides.mp4",
+    "Cam11":     _DEMO_FEED_BASE + "ForBiggerMeltdowns.mp4",
+    "Cam13":     _DEMO_FEED_BASE + "SubaruOutbackOnStreetAndDirt.mp4",
+    "Cam16":     _DEMO_FEED_BASE + "WeAreGoingOnBullrun.mp4",
+    "ENT2":      _DEMO_FEED_BASE + "WhatCarCanYouGetForAGrand.mp4",
+    "Cam7_2F":   _DEMO_FEED_BASE + "VolkswagenGTIReview.mp4",
+    "Cam11_2F":  _DEMO_FEED_BASE + "Sintel.mp4",
+    "Cam14":     _DEMO_FEED_BASE + "TearsOfSteel.mp4",
+    "Cam15":     _DEMO_FEED_BASE + "ElephantsDream.mp4",
+    "ENT3":      _DEMO_FEED_BASE + "BigBuckBunny.mp4",
+    "Cam17":     _DEMO_FEED_BASE + "ForBiggerJoyrides.mp4",
+    "Cam12_3F":  _DEMO_FEED_BASE + "ElephantsDream.mp4",
+}
+
+
+@app.route("/api/tracking/add_feed", methods=["POST"])
+def api_tracking_add_feed():
+    """
+    Register a remote/streaming video URL against a camera. Body: {camera_id, url}.
+    Accepted schemes:
+      http(s)://...           — direct browser playback in <video>
+      rtsp://user:pass@host/  — server-side proxied to MJPEG via /stream/<cam>
+      /static/...             — local static path
+    """
+    payload = request.json or {}
+    camera_id = (payload.get("camera_id") or "").strip()
+    url = (payload.get("url") or "").strip()
+    if not camera_id or not url:
+        return abort(400, description="camera_id and url are required")
+    if not (url.startswith("http://") or url.startswith("https://")
+            or url.startswith("rtsp://") or url.startswith("/")):
+        return abort(400, description="url must be http(s), rtsp, or a local /static path")
+    reg = _load_clip_registry()
+    reg[camera_id] = url
+    _save_clip_registry(reg)
+    return jsonify({"registry": reg})
+
+
+# ---- Live RTSP -> MJPEG proxy ----------------------------------------------
+# Browsers can't play RTSP directly. cv2.VideoCapture opens the stream
+# server-side and we yield JPEG frames as multipart/x-mixed-replace so the
+# browser can show them in an <img> element. One capture per request keeps
+# the prototype simple; for production you'd want a single shared reader
+# thread per camera with a frame fan-out.
+def _is_rtsp(url):
+    return isinstance(url, str) and url.lower().startswith("rtsp://")
+
+
+def _mjpeg_generator(rtsp_url, target_fps=10, jpeg_quality=70):
+    cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+    try:
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    except Exception:
+        pass
+    if not cap.isOpened():
+        # Emit a single placeholder JPEG explaining the failure so the
+        # browser doesn't sit on a dead connection.
+        import numpy as np
+        img = np.zeros((360, 640, 3), dtype="uint8")
+        cv2.putText(img, "RTSP open failed", (40, 180), cv2.FONT_HERSHEY_SIMPLEX,
+                    1.0, (80, 80, 220), 2)
+        cv2.putText(img, rtsp_url[:80], (40, 220), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5, (200, 200, 200), 1)
+        ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
+        if ok:
+            yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
+        return
+
+    import time
+    min_dt = 1.0 / max(1, target_fps)
+    last = 0.0
+    try:
+        while True:
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                # Brief pause and retry; many cameras drop frames intermittently.
+                time.sleep(0.1)
+                continue
+            now = time.time()
+            if now - last < min_dt:
+                continue
+            last = now
+            ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
+            if not ok:
+                continue
+            yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
+                   + buf.tobytes() + b"\r\n")
+    finally:
+        cap.release()
+
+
+@app.route("/stream/<camera_id>")
+def stream_camera(camera_id):
+    """MJPEG proxy for the camera's registered RTSP URL."""
+    from flask import Response
+    reg = _load_clip_registry()
+    url = reg.get(camera_id)
+    if not url:
+        return abort(404, description=f"No feed registered for {camera_id}")
+    if not _is_rtsp(url):
+        # If the feed isn't RTSP, just redirect — the browser can fetch
+        # the http(s) URL directly.
+        from flask import redirect
+        return redirect(url, code=302)
+    return Response(_mjpeg_generator(url),
+                    mimetype="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.route("/api/tracking/load_demo_feeds", methods=["POST"])
+def api_tracking_load_demo_feeds():
+    """Bulk-register the demo MP4 URLs for every camera in DEMO_FEEDS."""
+    reg = _load_clip_registry()
+    reg.update(DEMO_FEEDS)
+    _save_clip_registry(reg)
+    return jsonify({"registry": reg, "loaded": list(DEMO_FEEDS.keys())})
+
+
+@app.route("/api/tracking/clips/<camera_id>", methods=["DELETE"])
+def api_tracking_clip_delete(camera_id):
+    """Remove a single camera's uploaded clip."""
+    reg = _load_clip_registry()
+    url = reg.pop(camera_id, None)
+    if url:
+        fname = url.rsplit("/", 1)[-1]
+        fpath = os.path.join(TRACKING_CLIPS_DIR, fname)
+        if os.path.exists(fpath):
+            try:
+                os.remove(fpath)
+            except OSError:
+                pass
+    _save_clip_registry(reg)
+    return jsonify({"registry": reg})
+
+
+@app.route("/api/tracking/search", methods=["POST"])
+def api_tracking_search():
+    """
+    Person-of-interest search. In the prototype, regardless of query payload
+    we return the precomputed candidates_for_query list. The real pipeline
+    will replace this with: feature_extract(query) -> cosine_similarity(gallery)
+    -> filter by camera_network reachability -> return ranked list.
+    """
+    data = _load_tracking_data()
+    return jsonify({
+        "query_id": (request.json or {}).get("query_id", "user_upload"),
+        "feature_extractor": "swin_v2",
+        "candidates": data.get("candidates_for_query", []),
+    })
+
+
+@app.route("/api/tracking/journey/<track_id>", methods=["GET"])
+def api_tracking_journey(track_id):
+    """
+    Return the reconstructed journey for a track, augmented with the
+    uploaded clip URL for each appearance's camera. RTSP URLs are
+    rewritten to the local /stream/<camera_id> MJPEG proxy and tagged
+    is_live=True so the frontend swaps to <img> playback.
+    """
+    journeys = _load_tracking_data().get("journeys", {})
+    if track_id not in journeys:
+        return abort(404, description=f"No journey found for {track_id}")
+    journey = dict(journeys[track_id])
+    reg = _load_clip_registry()
+    out = []
+    for a in journey.get("appearances", []):
+        url = reg.get(a["camera"])
+        is_live = _is_rtsp(url)
+        if is_live:
+            url = f"/stream/{a['camera']}"
+        out.append({**a, "clip_url": url, "is_live": bool(is_live)})
+    journey["appearances"] = out
+    return jsonify(journey)
 # # For gpus 
 # vmodel = AutoModelForCausalLM.from_pretrained(
 #     model_id, trust_remote_code=True, revision=revision,
@@ -318,23 +921,19 @@ def index():
     if request.method == "POST":
         file = request.files.get("video")
         user_prompt = request.form.get("prompt")
-        if user_prompt is None or user_prompt.strip() == "":
-            prompt=f"""Analyze the human behavior in the image. Is there any indication of violence, gun use, or drug use? 
+        context = user_prompt.strip() if user_prompt and user_prompt.strip() else "general behavior monitoring"
+        prompt = f"""You are analyzing a single still frame from surveillance video.
 
-            Instructions:
-            - Begin your answer with "Yes" or "No".
-            - If the answer is "Yes", describe the situation, detailing any signs of violence, weapons, or drug activity.
-            - If the answer is "No", simply state, "No safety concern detected."
-            - Always start your answer with "Yes" or "No"."""
-        else:
-            prompt=f"""Analyze the human behavior in the image. Is there any indication of violence, gun use, or drug use? 
+Scan the frame for any of these specific activities or objects:
+{KB_CHECKLIST}
 
-                Instructions:
-                - Begin your answer with "Yes" or "No".
-                - If the answer is "Yes", describe the situation, detailing any signs of violence, weapons, or drug activity.
-                - If the answer is "No", simply state, "No safety concern detected."
-                - Always start your answer with "Yes" or "No".
-                The user is looking for: {user_prompt}"""
+Respond on EXACTLY two lines:
+Line 1: Y or N. Y if any item from the checklist above is visible. N otherwise.
+Line 2: 2 to 3 sentences (about 50 to 80 words) describing what is visible — the people, their clothing and actions, the setting, and any objects of interest. If Y, name the matching item in the first sentence using the exact words from the checklist (e.g. "knife", "cigarette", "fallen on the floor") and describe how it is being used.
+
+Rules: no disclaimers, no "Important Note", no "Recommendation", no "Further Investigation", no invented timestamps like "0:00-0:03", no "Subject A" labels, no "based on visual cues", no "appears to be", no hedging phrases. Describe only what you see, in plain declarative sentences.
+
+User context: {context}"""
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
@@ -344,69 +943,134 @@ def index():
             print(f"Extracted {len(frames)} frames from the video.")
             if not frames:
                 return render_template("index.html", error="No frames extracted from the video.")
-            captioned_frames = {}
-            images_for_pdf = []
-            captions=[]
-            for i, frame in enumerate(frames):
+            records = []
+            f = 0
+            for i, (frame, ts_seconds) in enumerate(frames):
                 try:
-                    pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
                     success, buffer = cv2.imencode('.jpg', frame)
                     img_base64 = base64.b64encode(buffer).decode('utf-8')
-                    caption=ollama_model(prompt, img_base64)
-                    response2=caption[0:3]
-                    # Normalize the answer
-                    #resp_clean = response.strip().lower()
-                    resp_clean = (caption or "").strip()
-                                
+                    caption_raw = ollama_model(prompt, img_base64) or ""
+                    caption_raw = caption_raw.strip()
 
-                    # ----------- Filtering strategy -----------
-                    labels, top_sev = classify_incident(resp_clean, INCIDENT_KB)
-                    is_yes = resp_clean.startswith("yes")
-                    is_critical = top_sev in ("critical", "high")  # decision comes from KB
-                    #print(f"is_critical={is_critical}")
-                    #print(f"[KB] labels={labels}, top_severity={top_sev}")
-                    print(f"Orginal LLM Response {caption}")
+                    # Parse: line 1 is Y/N, line 2+ is the description.
+                    lines = [l.strip() for l in caption_raw.splitlines() if l.strip()]
+                    if lines:
+                        flag = lines[0][:1].upper()
+                        if len(lines) >= 2:
+                            description = " ".join(lines[1:])
+                        else:
+                            description = re.sub(r"^[YN]\b[\s\.,;:\-]*", "", lines[0], flags=re.IGNORECASE)
+                    else:
+                        flag = "N"
+                        description = ""
+                    description = description.strip()
 
-                    # Use both the Gemma "Yes/No" AND the KB classification
-                    first_char = response2[:1]  # safe
+                    labels, top_sev = classify_incident(description or caption_raw, INCIDENT_KB)
+                    # The KB regex is negation-blind — it matches "weapon"
+                    # inside "no visible weapons" and tags the frame critical.
+                    # Only override on an explicit N so we don't lose critical
+                    # events when the model drops the Y/N format and the
+                    # parsed flag ends up as something else (e.g. "L").
+                    if flag == "N":
+                        labels, top_sev = [], "low"
+                    print(f"[frame {i+1}] flag={flag} sev={top_sev} desc={description[:80]}")
 
-                    #print(f'First LLM Response {response1}')
-                    print(f'Second LLM Response {response2}')
-                    #if (top_sev in ("critical", "high")):
-                    if response2[0]=="y" or response2[0]=="Y" or response2[0]=="H":
-                        print(f"Frame {i+1} caption: {caption}")
-                        captioned_frames[i] = (caption)
-                        images_for_pdf.append(frame)
-                        captions.append(caption)
+                    # Keep if model flagged it OR every 10th frame (so we have baseline coverage).
+                    if flag == "Y" or f % 10 == 0:
+                        records.append({
+                            "ts_seconds": ts_seconds,
+                            "ts_label": _format_timestamp(ts_seconds),
+                            "text": description or "(no description)",
+                            "frame": frame,
+                            "labels": labels,
+                            "severity": top_sev,
+                        })
+                    f += 1
                 except Exception as e:
                     print(f"Error in frame {i}: {e}")
-            outputs = clustering_denoise(captioned_frames)
-            outputs = ", ".join(f"{key}: '{value}'" for key, value in outputs.items())
-            prompt_s = f"""
-                You are an assistant tasked with summarizing incidents from a video using frame-by-frame image captions and creating a comprehensive report.
 
-                Instructions:
-                - Review the frame captions provided below carefully.
-                - Identify and highlight key incidents or significant events from the frames.
-                - Write a clear, concise paragraph for each identified incident.
-                - Start each paragraph with a **bolded incident title** (e.g., "Knife Found:") followed by a brief narrative. Include the approximate time, a description of the incident, and any relevant context from the frame captions.
-                - After summarizing the incidents, compile the information into a **full, proper report**. Ensure the report is well-structured and cohesive, and provides a clear overview of the incidents.
-                
-                Example:
-                **Knife Found:** At approximately 19:40, a youth arrived at the shelter for supper. During a routine search, staff discovered a knife tucked inside their backpack.
+            # Deduplicate near-identical consecutive captions using the sentence
+            # embeddings + DBSCAN pipeline already wired up at module load time.
+            if len(records) >= 5:
+                try:
+                    cap_dict = {idx: r["text"] for idx, r in enumerate(records)}
+                    filtered = clustering_denoise(cap_dict)
+                    if filtered:
+                        kept = set(filtered.keys())
+                        before = len(records)
+                        records = [r for idx, r in enumerate(records) if idx in kept]
+                        print(f"Dedup: {before} -> {len(records)} records")
+                except Exception as e:
+                    print(f"Dedup skipped: {e}")
 
-                Now, process the following:
+            # Build a real formatted string for the summary prompt — the old
+            # code passed the dict's repr to the f-string, which Gemma read
+            # as garbage and replied "Okay".
+            captions_block = "\n".join(
+                f"[{r['ts_label']}] {r['text']}" for r in records
+            ) or "(no notable frames captured)"
 
-                User Prompt: 
-                {prompt}
+            prompt_s = f"""You are a security analyst writing an executive summary of a surveillance video, using only the timestamped frame observations below.
 
-                Frame Captions: 
-                {captioned_frames}
-            """
-            #summary=''.join([f"Frame {i+1}: {caption}" for i, (caption, _) in enumerate(captioned_frames)])
-            summary = ollama_QA(outputs,prompt_s)
-            pdf_filename = save_summary_to_pdf(summary,images=images_for_pdf,image_captions=captions)
-            return render_template("index.html", summary=summary, pdf_file=pdf_filename)
+Instructions:
+- Write a single coherent summary, 4 to 7 sentences.
+- Lead with the most serious incident (weapon, violence, drug activity) and its timestamp.
+- Mention other notable events in chronological order with their timestamps.
+- If nothing notable occurred, say so plainly in one sentence.
+- Use plain prose. No markdown, no bullets, no headings, no bold, no asterisks.
+- Do not add disclaimers, recommendations, or notes about needing further footage.
+- Do not invent details that are not in the observations.
+
+User context: {context}
+
+Timestamped observations:
+{captions_block}"""
+
+            summary = ollama_QA(captions_block, prompt_s)
+
+            images_for_pdf = [(r["frame"], r["ts_seconds"]) for r in records]
+            captions = [
+                {
+                    "t": r["ts_label"],
+                    "ts_seconds": r["ts_seconds"],
+                    "text": r["text"],
+                    "labels": r["labels"],
+                    "severity": r["severity"],
+                }
+                for r in records
+            ]
+            pdf_filename = save_summary_to_pdf(summary, images=images_for_pdf, image_captions=captions)
+
+            # Inline base64 JPEGs for the dashboard frame gallery so we don't
+            # need a separate static route per upload. Quality 70 keeps payload
+            # reasonable for ~50 thumbnails.
+            frames_for_view = []
+            for r in records:
+                ok, buf = cv2.imencode(".jpg", r["frame"], [cv2.IMWRITE_JPEG_QUALITY, 70])
+                if not ok:
+                    continue
+                b64 = base64.b64encode(buf).decode("utf-8")
+                frames_for_view.append({
+                    "t": r["ts_label"],
+                    "image": f"data:image/jpeg;base64,{b64}",
+                    "text": _clean_report_text(r["text"]) or "(no description)",
+                    "severity": r["severity"],
+                    "labels": ", ".join(r["labels"]) if r["labels"] else "",
+                })
+            frames_for_view.sort(key=lambda f: f["t"])
+
+            # Cache this video's captions so the user can ask follow-up
+            # questions against the same observations without re-uploading.
+            sid = _store_session(captions_block, context, filename)
+
+            return render_template(
+                "index.html",
+                summary=summary,
+                pdf_file=pdf_filename,
+                frames=frames_for_view,
+                session_id=sid,
+                source_filename=filename,
+            )
         return render_template("index.html", error="Invalid file format")
 
     return render_template("index.html")

@@ -1,140 +1,463 @@
 {
   "weapon_gun": {
-    "synonyms": ["gun", "pistol", "revolver", "rifle", "firearm"],
-    "regex": ["\\bgun\\b", "\\bpistol\\b", "\\brevolver\\b", "\\brifle\\b", "\\bfirearm(s)?\\b"],
+    "synonyms": ["gun", "pistol", "revolver", "rifle", "firearm", "handgun", "shotgun", "machine gun", "submachine gun", "ak-47", "ar-15", "sniper", "assault rifle", "pointing a gun", "aiming gun", "drew a gun", "shooting", "shot", "fired"],
+    "regex": [
+      "\\bgun(s|man|men|fire)?\\b",
+      "\\bpistol(s)?\\b",
+      "\\brevolver(s)?\\b",
+      "\\brifle(s)?\\b",
+      "\\bfirearm(s)?\\b",
+      "\\bhandgun(s)?\\b",
+      "\\bshotgun(s)?\\b",
+      "\\b(machine|sub-?machine|assault) (gun|rifle)\\b",
+      "\\b(ak-?47|ar-?15)\\b",
+      "\\bsniper\\b",
+      "\\b(pointing|aiming|drew|drawn|brandish(ing|ed)?) (a |the )?(gun|pistol|firearm|weapon)\\b",
+      "\\bshoot(ing|er|out)?\\b",
+      "\\b(shot|fired|firing) (at|by|towards|toward)\\b",
+      "\\bmuzzle\\b"
+    ],
     "severity": "critical",
     "cooldown_secs": 0
   },
   "weapon_knife": {
-    "synonyms": ["knife", "blade", "machete"],
-    "regex": ["\\bknife\\b", "\\bblade\\b", "\\bmachete\\b"],
+    "synonyms": ["knife", "knives", "blade", "machete", "dagger", "switchblade", "box cutter", "sword", "stabbing", "stabbed", "holding a knife", "sharp object"],
+    "regex": [
+      "\\bknife\\b",
+      "\\bknives\\b",
+      "\\bblade(d|s)?\\b",
+      "\\bmachete(s)?\\b",
+      "\\bdagger(s)?\\b",
+      "\\bswitchblade(s)?\\b",
+      "\\bbox cutter(s)?\\b",
+      "\\bsword(s)?\\b",
+      "\\bstab(bed|bing|s)?\\b",
+      "\\bholding (a |the )?(knife|blade|machete|dagger|sword)\\b",
+      "\\bsharp object\\b"
+    ],
     "severity": "critical",
     "cooldown_secs": 0
   },
   "weapon_other": {
-    "synonyms": ["bat", "hammer", "wrench", "metal bar", "pipe"],
-    "regex": ["\\bbat\\b", "\\bhammer\\b", "\\bwrench\\b", "\\b(pipe|metal bar)\\b"],
+    "synonyms": ["weapon", "armed", "brandishing", "wielding", "holding a weapon", "bat", "hammer", "wrench", "metal bar", "pipe", "club", "baton", "crowbar", "taser", "stun gun", "improvised weapon", "blunt object", "rock", "brick", "broken bottle"],
+    "regex": [
+      "\\bweapon(s|ized|ry)?\\b",
+      "\\barmed (with|man|woman|individual|person|attacker|assailant|suspect)?\\b",
+      "\\bbrandish(ing|ed|es)?\\b",
+      "\\bwield(ing|ed|s)?\\b",
+      "\\bholding (a |the )?weapon\\b",
+      "\\bbat\\b",
+      "\\bhammer(s)?\\b",
+      "\\bwrench(es)?\\b",
+      "\\b(pipe|metal bar|metal rod)\\b",
+      "\\bclub(s|bed|bing)?\\b",
+      "\\bbaton(s)?\\b",
+      "\\bcrowbar(s)?\\b",
+      "\\b(taser|stun gun|stun-gun)\\b",
+      "\\bimprovised weapon\\b",
+      "\\bblunt (object|instrument|weapon|force)\\b",
+      "\\bbroken bottle\\b"
+    ],
     "severity": "critical",
     "cooldown_secs": 0
   },
   "violence": {
-    "synonyms": ["fight", "fighting", "assault", "punch", "kick", "strangle", "choke"],
-    "regex": ["\\bfight(ing)?\\b", "\\bassault\\b", "\\bpunch(ing)?\\b", "\\bkick(ing)?\\b", "\\b(strangle|chok(e|ing))\\b"],
+    "synonyms": ["fight", "fighting", "fighting stance", "altercation", "scuffle", "brawl", "fistfight", "assault", "attacking", "attack", "punch", "kick", "strangle", "choke", "chokehold", "headlock", "shoving", "pushing", "wrestling", "grappling", "tackled", "tackling", "hitting", "beating", "slapping", "threatening", "menacing", "aggressive", "aggression", "violent", "violence", "hostile", "physical confrontation", "physical altercation", "physical fight", "raised fist", "swinging at", "throwing punches", "throwing a punch", "knocked down", "knocked out", "thrown to the ground", "domestic dispute", "domestic violence", "rage", "raging"],
+    "regex": [
+      "\\bfight(ing|er|ers|s)?\\b",
+      "\\bfighting stance\\b",
+      "\\bfistfight(s)?\\b",
+      "\\baltercation(s)?\\b",
+      "\\bscuffle(s|d)?\\b",
+      "\\bbrawl(ing|er|ers|s)?\\b",
+      "\\bassault(ing|ed|s|ant|ants)?\\b",
+      "\\battack(ing|ed|er|ers|s)?\\b",
+      "\\bpunch(ing|ed|es|er|ers)?\\b",
+      "\\bkick(ing|ed|s|er|ers)?\\b",
+      "\\b(strangle|chok(e|ing|ed)|chokehold|headlock)\\b",
+      "\\bshov(e|ing|ed|es)\\b",
+      "\\bpush(ing|ed|es)\\b",
+      "\\bwrestl(e|ing|ed|es)\\b",
+      "\\bgrappl(e|ing|ed|es)\\b",
+      "\\btackl(e|ed|ing|es)\\b",
+      "\\bhit(ting|s)?\\b",
+      "\\bbeat(ing|en|s|er)?\\b",
+      "\\bslap(ping|ped|s)?\\b",
+      "\\bthreaten(ing|ed|s)?\\b",
+      "\\bmenac(e|ing|ed|es)\\b",
+      "\\baggressive(ly)?\\b",
+      "\\baggression\\b",
+      "\\bviolent(ly)?\\b",
+      "\\bviolence\\b",
+      "\\bhostile\\b",
+      "\\bhostility\\b",
+      "\\bphysical (confrontation|altercation|fight|attack|violence|aggression)\\b",
+      "\\braised fist(s)?\\b",
+      "\\bswinging at\\b",
+      "\\bthrow(ing|n)? (a )?(punch|punches|kick|kicks)\\b",
+      "\\bknock(ed|ing) (down|out|over|unconscious)\\b",
+      "\\bthrown to the (ground|floor|pavement)\\b",
+      "\\bdomestic (dispute|violence|abuse|argument)\\b",
+      "\\b(rage|raging|enraged|furious)\\b",
+      "\\bgrab(bed|bing)? (by the|him|her|them)\\b",
+      "\\brestrain(ing|ed)\\b"
+    ],
     "severity": "critical",
     "cooldown_secs": 0
   },
   "smoking_vaping": {
-    "synonyms": ["smoking", "cigarette", "vape", "vaping", "joint"],
-    "regex": ["\\bsmok(ing|e)\\b", "\\bcig(ar|arette)\\b", "\\bvap(e|ing)\\b", "\\bjoint\\b"],
+    "synonyms": ["smoking", "smoking gesture", "smoking substance", "cigarette", "cigar", "vape", "vaping", "joint", "in mouth", "smoke", "lit cigarette", "lighter", "exhaling smoke", "blowing smoke", "puffing", "puff", "tobacco", "hookah", "bong", "e-cigarette", "ecig", "vaporizer"],
+    "regex": [
+      "\\bsmok(ing|e|er|ers|ed|es)\\b",
+      "\\bsmoking (gesture|substance|posture|action)\\b",
+      "\\bcig(ar|arette)(s)?\\b",
+      "\\b(e-cig|ecig|e-cigarette)(s|arette)?\\b",
+      "\\bvap(e|ing|or|orizer|ed|es)\\b",
+      "\\bjoint(s)?\\b",
+      "\\b(cigarette|vape|object|something|item) in (his|her|their|the person's|the suspect's|the man's|the woman's) mouth\\b",
+      "\\bin (his|her|their|the person's|the suspect's|the man's|the woman's) mouth\\b",
+      "\\blit cigarette\\b",
+      "\\b(lighter|matches|match) (in|held|out)\\b",
+      "\\b(exhal(e|ing)|blow(ing)?) smoke\\b",
+      "\\bpuff(ing|ed|s)?\\b",
+      "\\btobacco\\b",
+      "\\b(hookah|bong|pipe (for|of) (smoke|smoking))\\b"
+    ],
     "severity": "high",
     "cooldown_secs": 120
   },
   "drugs": {
-    "synonyms": ["drugs", "drug use", "substance"],
-    "regex": ["\\bdrug(s)?\\b", "\\bsubstance(s)?\\b"],
+    "synonyms": ["drugs", "drug use", "substance", "pills", "intoxicated", "drunk", "impaired", "injection", "snorting", "needle", "syringe", "under the influence", "high on drugs", "drug deal", "drug exchange", "rolling a joint", "huffing", "narcotics", "cocaine", "heroin", "meth", "methamphetamine", "marijuana", "cannabis", "weed"],
+    "regex": [
+      "\\bdrug(s|-?use|-?user|-?users|-?dealing|-?dealer)?\\b",
+      "\\bsubstance(s)?\\b",
+      "\\bpill(s)?\\b",
+      "\\bintoxicat(ed|ion)\\b",
+      "\\bdrunk\\b",
+      "\\binebriat(ed|ion)\\b",
+      "\\bimpair(ed|ment)\\b",
+      "\\bunder the influence\\b",
+      "\\bhigh on (drugs|substances)\\b",
+      "\\binject(ing|ion|ed|s)\\b",
+      "\\bsnort(ing|ed|s)\\b",
+      "\\bhuff(ing|ed)\\b",
+      "\\bneedle(s)?\\b",
+      "\\bsyringe(s)?\\b",
+      "\\bdrug (deal|exchange|transaction|trade|sale)\\b",
+      "\\brolling (a |the )?joint\\b",
+      "\\bnarcotic(s)?\\b",
+      "\\bcocaine\\b",
+      "\\bheroin\\b",
+      "\\b(meth|methamphetamine|crystal meth)\\b",
+      "\\b(marijuana|cannabis|weed)\\b"
+    ],
     "severity": "high",
     "cooldown_secs": 120
   },
   "medical_fall": {
-    "synonyms": ["fallen", "fall", "falls", "falling", "collapse", "collapsed"],
-    "regex": ["\\bfall(en|s|ing)?\\b", "\\bcollaps(e|ed)\\b"],
+    "synonyms": ["fallen", "fall", "falls", "falling", "collapse", "collapsed", "lying on the floor", "lying on the ground", "lying on floor", "lying on ground", "on the floor", "on the ground", "person down", "slumped", "fell down", "fell over", "elderly fall", "tripping", "tripped"],
+    "regex": [
+      "\\bfall(en|s|ing)?\\b",
+      "\\bfell (down|over|to|on|onto)\\b",
+      "\\bcollaps(e|ed|ing|es)\\b",
+      "\\blying (on (the )?(floor|ground|pavement|sidewalk|street|road)|down (on)?)\\b",
+      "\\b(on|laying on|lying on) the (floor|ground|pavement|sidewalk|street|road)\\b",
+      "\\bperson down\\b",
+      "\\b(man|woman|person|individual|elderly|child|kid) (is |appears |seen )?(down|fallen|lying)\\b",
+      "\\bslump(ed|ing|s)?\\b",
+      "\\btripp(ed|ing)\\b"
+    ],
     "severity": "critical",
     "cooldown_secs": 0
   },
   "medical_unresponsive": {
-    "synonyms": ["unconscious", "unresponsive", "passed out", "fainted", "not moving"],
-    "regex": ["\\bunconscious\\b", "\\bunresponsive\\b", "\\bpassed out\\b", "\\bfaint(ed|ing)?\\b", "\\bnot moving\\b"],
+    "synonyms": ["unconscious", "appears unconscious", "unresponsive", "passed out", "fainted", "not moving", "motionless", "limp", "convulsing", "seizure", "incapacitated", "bleeding", "injured", "wounded", "wound", "blood on", "in pain", "groaning", "needs medical attention", "needs help", "medical emergency"],
+    "regex": [
+      "\\bunconscious(ness)?\\b",
+      "\\bappears? unconscious\\b",
+      "\\bunresponsive(ness)?\\b",
+      "\\bpassed out\\b",
+      "\\bfaint(ed|ing|s)?\\b",
+      "\\bnot (moving|responding|breathing)\\b",
+      "\\bmotionless\\b",
+      "\\blimp\\b",
+      "\\bconvuls(e|ing|ions?|ed|es)\\b",
+      "\\bseizure(s)?\\b",
+      "\\bincapacitat(ed|ion)\\b",
+      "\\bbleed(ing|s)?\\b",
+      "\\binjur(ed|y|ies)\\b",
+      "\\bwound(ed|s)?\\b",
+      "\\bblood (on|covering|stained|pooling)\\b",
+      "\\bin pain\\b",
+      "\\bgroan(ing|ed|s)?\\b",
+      "\\b(needs|requires) (medical (attention|help|aid|assistance)|an ambulance)\\b",
+      "\\bmedical emergency\\b"
+    ],
+    "severity": "critical",
+    "cooldown_secs": 0
+  },
+  "self_harm": {
+    "synonyms": ["self-harm", "self harm", "self harming", "self-harming", "suicide", "suicide attempt", "suicidal", "cutting wrist", "cutting wrists", "overdose", "jumping from", "rooftop edge", "hanging himself", "hanging herself", "hanging themselves"],
+    "regex": [
+      "\\bself[- ]?harm(ing|ed)?\\b",
+      "\\bsuicid(e|al|ality)\\b",
+      "\\bsuicide attempt\\b",
+      "\\battempting suicide\\b",
+      "\\bcutting (himself|herself|themselves|wrist|wrists)\\b",
+      "\\boverdose(d|ing)?\\b",
+      "\\b(jump(ing)? from|on the edge of|standing on the edge|standing on the (roof|ledge|railing|rooftop))\\b",
+      "\\bhanging (himself|herself|themselves|from)\\b"
+    ],
     "severity": "critical",
     "cooldown_secs": 0
   },
   "loitering_suspicious": {
-    "synonyms": ["loitering", "suspicious"],
-    "regex": ["\\bloiter(ing)?\\b", "\\bsuspicious\\b"],
+    "synonyms": ["loitering", "suspicious", "lingering", "hanging around", "casing"],
+    "regex": ["\\bloiter(ing|ed|er|ers)?\\b", "\\bsuspicious(ly)?\\b", "\\blingering\\b", "\\bhanging around\\b", "\\bcasing (the )?(place|building|area|joint)\\b"],
     "severity": "moderate",
-    "cooldown_secs": 300
+    "cooldown_secs": 200
   },
   "suspicious": {
     "synonyms": ["suspicious"],
-    "regex": ["\\bloiter(ing)?\\b", "\\bsuspicious\\b"],
+    "regex": ["\\bloiter(ing)?\\b", "\\bsuspicious(ly)?\\b"],
     "severity": "moderate",
-    "cooldown_secs": 300
+    "cooldown_secs": 200
   },
   "break_in_trespass": {
-    "synonyms": ["trespass", "trespassing", "break-in", "forced entry", "unauthorized entry", "crowbar", "prying"],
-    "regex": ["\\btrespass(ing)?\\b", "\\bbreak-?in\\b", "\\bforced entry\\b", "\\bunauthorized entry\\b", "\\bcrowbar\\b", "\\bpry(ing)?\\b"],
+    "synonyms": ["trespass", "trespassing", "trespasser", "break-in", "breaking in", "broke in", "forced entry", "unauthorized entry", "crowbar", "prying", "intruder", "intrusion", "climbing fence", "scaling fence", "jumping fence", "lockpicking", "picking the lock", "smashing window to enter"],
+    "regex": [
+      "\\btrespass(ing|er|ers|ed)?\\b",
+      "\\bbreak-?in(s)?\\b",
+      "\\b(breaking|broke) (in|into)\\b",
+      "\\bforced entry\\b",
+      "\\bunauthorized (entry|access)\\b",
+      "\\bcrowbar(s)?\\b",
+      "\\bpry(ing|ed|s)?\\b",
+      "\\bintrud(er|ers|ing|ed)\\b",
+      "\\bintrusion(s)?\\b",
+      "\\b(climbing|scaling|jumping (over)?|hopping) (the |a )?(fence|wall|gate|barrier)\\b",
+      "\\b(lockpick|lock-pick|picking the lock)(ing|ed)?\\b",
+      "\\bsmash(ing|ed) (window|door|glass) to (enter|gain entry|break in)\\b"
+    ],
     "severity": "high",
     "cooldown_secs": 0
   },
   "property_damage": {
-    "synonyms": ["vandalism", "vandalize", "graffiti", "broken window", "smash", "damaged"],
-    "regex": ["\\bvandal(ism|ize|ized)\\b", "\\b(graffiti|tagging)\\b", "\\bbroken (window|glass|door)\\b", "\\bsmash(ing|ed)?\\b", "\\bdamage(d)?\\b"],
-    "severity": "moderate",
+    "synonyms": ["vandalism", "vandalize", "vandalizing", "graffiti", "tagging", "broken window", "broken glass", "broken door", "smash", "smashing", "damaged", "destroying", "destruction", "spray painting", "kicking door", "kicked door"],
+    "regex": [
+      "\\bvandal(ism|ize|ized|izing|s)\\b",
+      "\\b(graffiti|tagging)\\b",
+      "\\bbroken (window|glass|door|fence|mirror)\\b",
+      "\\bsmash(ing|ed|es)?\\b",
+      "\\bdamag(e|ed|ing)\\b",
+      "\\bdestroy(ing|ed|s)?\\b",
+      "\\bdestruction\\b",
+      "\\bspray[- ]paint(ing|ed)?\\b",
+      "\\bkick(ing|ed) (the |a )?(door|wall|car|vehicle|window)\\b"
+    ],
+    "severity": "high",
     "cooldown_secs": 0
   },
   "fire_hazard": {
-    "synonyms": ["fire", "flames", "on fire", "burning", "thick smoke", "black smoke"],
-    "regex": ["\\bon fire\\b", "\\bflame(s)?\\b", "\\bburn(ing|s)?\\b", "\\bthick smoke\\b", "\\bblack smoke\\b"],
+    "synonyms": ["fire", "flames", "on fire", "burning", "thick smoke", "black smoke", "explosion", "exploding", "blast", "ignited", "blaze", "blazing", "inferno"],
+    "regex": [
+      "\\bon fire\\b",
+      "\\bflame(s|d)?\\b",
+      "\\bburn(ing|s|ed|t)?\\b",
+      "\\b(thick|black|heavy|dense) smoke\\b",
+      "\\bsmoke (from|coming from|billowing|rising|pouring)\\b",
+      "\\bexplo(sion|ding|ded|de)\\b",
+      "\\bblast(ing|ed)?\\b",
+      "\\bignit(e|ed|ing|ion)\\b",
+      "\\bblaz(e|ing|ed)\\b",
+      "\\binferno\\b"
+    ],
     "severity": "critical",
     "cooldown_secs": 0
   },
   "alarm_sprinkler": {
-    "synonyms": ["alarm", "fire alarm", "siren", "strobe", "sprinkler", "extinguisher"],
-    "regex": ["\\bfire alarm\\b", "\\b(alarm|siren|strobe)\\b", "\\bsprinkler(s)?\\b", "\\bextinguisher( discharge)?\\b"],
+    "synonyms": ["alarm", "fire alarm", "siren", "strobe", "sprinkler", "extinguisher", "alarm sounding", "alarm going off"],
+    "regex": ["\\bfire alarm\\b", "\\b(alarm|siren|strobe)(s)?\\b", "\\bsprinkler(s)?\\b", "\\bextinguisher( discharge)?\\b", "\\balarm (sounding|going off|activated|triggered)\\b"],
     "severity": "high",
     "cooldown_secs": 0
   },
   "vehicle_collision": {
-    "synonyms": ["crash", "collision", "hit by car", "run over", "struck", "car accident"],
-    "regex": ["\\b(crash|collision)\\b", "\\bhit by\\b", "\\brun over\\b", "\\bstruck\\b", "\\bcar accident\\b"],
+    "synonyms": ["crash", "collision", "hit by car", "run over", "struck", "car accident", "vehicle accident", "hit and run", "rear-ended", "rolled over"],
+    "regex": [
+      "\\b(crash(ed|ing|es)?|collision(s)?)\\b",
+      "\\bhit by (a |the )?(car|vehicle|truck|bus|motorcycle|bike)\\b",
+      "\\brun over\\b",
+      "\\bstruck (by|a)\\b",
+      "\\b(car|vehicle|traffic) accident\\b",
+      "\\bhit[- ]and[- ]run\\b",
+      "\\brear[- ]ended\\b",
+      "\\brolled over\\b",
+      "\\bvehicle on fire\\b"
+    ],
     "severity": "critical",
     "cooldown_secs": 0
   },
+  "reckless_driving": {
+    "synonyms": ["speeding", "reckless driving", "driving recklessly", "driving on sidewalk", "racing", "wrong way", "donuts in"],
+    "regex": [
+      "\\bspeed(ing)\\b",
+      "\\breckless(ly)? driv(ing|er)\\b",
+      "\\bdriving recklessly\\b",
+      "\\bdriving on (the )?(sidewalk|pavement|grass|lawn)\\b",
+      "\\bracing (down|on|through)\\b",
+      "\\bwrong way (on|down)\\b",
+      "\\bdoing donuts\\b"
+    ],
+    "severity": "high",
+    "cooldown_secs": 60
+  },
   "open_alcohol": {
-    "synonyms": ["alcohol", "beer", "wine", "vodka", "liquor", "open container"],
-    "regex": ["\\balcohol\\b", "\\bbeer\\b", "\\bwine\\b", "\\bliquor\\b", "\\bvodka\\b", "\\bopen container\\b"],
+    "synonyms": ["alcohol", "beer", "wine", "vodka", "liquor", "open container", "drinking alcohol", "bottle of liquor"],
+    "regex": ["\\balcohol(ic)?\\b", "\\bbeer(s)?\\b", "\\bwine\\b", "\\bliquor\\b", "\\bvodka\\b", "\\bwhiskey\\b", "\\brum\\b", "\\bopen container\\b", "\\bdrinking (alcohol|beer|wine|liquor)\\b", "\\bbottle of (liquor|alcohol|beer|wine)\\b"],
     "severity": "moderate",
     "cooldown_secs": 300
   },
   "face_concealment": {
-    "synonyms": ["balaclava", "ski mask", "face covering", "face concealed", "hood up"],
-    "regex": ["\\bbalaclava\\b", "\\bski mask\\b", "\\bface (covering|concealed)\\b", "\\bhood up\\b"],
+    "synonyms": ["balaclava", "ski mask", "face covering", "face concealed", "hood up", "face hidden", "mask covering face"],
+    "regex": ["\\bbalaclava\\b", "\\bski mask\\b", "\\bface (covering|concealed|hidden|covered|obscured)\\b", "\\bhood(ie)? up\\b", "\\bmask covering (his|her|their|the) face\\b"],
     "severity": "moderate",
     "cooldown_secs": 300
   },
   "child_unattended": {
-    "synonyms": ["child alone", "unattended child", "unsupervised child", "child without adult"],
-    "regex": ["\\b(child|kid) alone\\b", "\\b(unattended|unsupervised) child\\b", "\\bchild without adult\\b"],
+    "synonyms": ["child alone", "unattended child", "unsupervised child", "child without adult", "lost child", "crying child"],
+    "regex": [
+      "\\b(child|kid|toddler|baby|infant) alone\\b",
+      "\\b(unattended|unsupervised) (child|kid|toddler|baby|infant|minor)\\b",
+      "\\bchild without (an )?adult\\b",
+      "\\b(lost|missing) (child|kid|toddler)\\b",
+      "\\bcrying (child|toddler|baby|infant)\\b"
+    ],
     "severity": "high",
     "cooldown_secs": 120
   },
   "animal_on_site": {
-    "synonyms": ["dog", "animal", "wildlife", "coyote", "bear", "pet"],
-    "regex": ["\\bdog\\b", "\\banimal\\b", "\\b(wildlife|coyote|bear)\\b", "\\bpet\\b"],
+    "synonyms": ["dog", "animal", "wildlife", "coyote", "bear", "pet", "stray dog", "aggressive dog", "barking dog"],
+    "regex": ["\\bdog(s)?\\b", "\\banimal(s)?\\b", "\\b(wildlife|coyote|bear|raccoon|deer|skunk|fox)\\b", "\\bpet(s)?\\b", "\\b(stray|aggressive|barking) (dog|animal)\\b"],
     "severity": "moderate",
     "cooldown_secs": 300
   },
   "camera_tamper": {
-    "synonyms": ["camera covered", "camera blocked", "camera tampered", "lens sprayed", "obscured camera"],
-    "regex": ["\\bcamera (covered|blocked|obscured)\\b", "\\btamper(ed|ing)?\\b", "\\bspray paint(ed)?\\b", "\\bcap on lens\\b"],
+    "synonyms": ["camera covered", "camera blocked", "camera tampered", "lens sprayed", "obscured camera", "camera knocked", "view obstructed"],
+    "regex": [
+      "\\bcamera (covered|blocked|obscured|tampered|knocked|moved|disabled)\\b",
+      "\\btamper(ed|ing|s)?\\b",
+      "\\bspray paint(ed)?\\b",
+      "\\bcap on (the )?lens\\b",
+      "\\b(view|lens) (obstructed|blocked|covered)\\b"
+    ],
     "severity": "moderate",
     "cooldown_secs": 300
   },
   "crowding_overcapacity": {
-    "synonyms": ["crowd", "crowded", "over capacity", "packed", "large group"],
-    "regex": ["\\bcrowd(ed|ing)?\\b", "\\bover(-| )?capacity\\b", "\\bpacked\\b", "\\blarge group\\b"],
+    "synonyms": ["crowd", "crowded", "over capacity", "packed", "large group", "gathering", "throng"],
+    "regex": ["\\bcrowd(ed|ing|s)?\\b", "\\bover(-| )?capacity\\b", "\\bpacked\\b", "\\blarge group\\b", "\\bthrong\\b", "\\blarge gathering\\b"],
     "severity": "moderate",
     "cooldown_secs": 300
   },
+  "riot_disturbance": {
+    "synonyms": ["riot", "rioting", "mob", "stampede", "panicked crowd", "people running", "people fleeing", "evacuation", "chaos", "chaotic"],
+    "regex": [
+      "\\briot(ing|ers|s)?\\b",
+      "\\bmob(bing|s)?\\b",
+      "\\bstampede(s|d|ing)?\\b",
+      "\\b(panicked|panicking|fleeing|terrified|frightened) (crowd|group|people|individuals)\\b",
+      "\\bpeople (running|fleeing|scattering) (away|in fear|in panic)\\b",
+      "\\bevacuation\\b",
+      "\\bchaos\\b",
+      "\\bchaotic (scene|situation)\\b"
+    ],
+    "severity": "critical",
+    "cooldown_secs": 0
+  },
   "hazard_sharps_spill": {
-    "synonyms": ["needle", "syringe", "sharps", "blood", "biohazard", "chemical spill", "spill"],
-    "regex": ["\\b(needle|syringe)\\b", "\\bsharps\\b", "\\b(blood|biohazard)\\b", "\\bchemical spill\\b", "\\bspill(ed|ing)?\\b"],
+    "synonyms": ["needle", "syringe", "sharps", "blood", "biohazard", "chemical spill", "spill", "broken glass on floor"],
+    "regex": ["\\b(needle|syringe)(s)?\\b", "\\bsharps\\b", "\\b(blood|biohazard)\\b", "\\bchemical spill\\b", "\\bspill(ed|ing|s)?\\b", "\\bbroken glass on (the )?(floor|ground)\\b"],
     "severity": "high",
     "cooldown_secs": 0
   },
   "theft": {
-    "synonyms": ["theft", "steal", "stealing", "shoplifting", "grab and run", "pocketed"],
-    "regex": ["\\btheft\\b", "\\bsteal(s|ing|er)?\\b", "\\bshoplift(ing)?\\b", "\\bgrab and run\\b", "\\bpocket(ed|ing)?\\b"],
+    "synonyms": ["theft", "steal", "stealing", "stolen", "shoplifting", "grab and run", "pocketed", "robbery", "robbing", "robbed", "burglar", "burglary", "snatched", "snatching", "pickpocket", "pickpocketing", "looting", "looter"],
+    "regex": [
+      "\\btheft(s)?\\b",
+      "\\bsteal(s|ing|er|ers)?\\b",
+      "\\bstole(n)?\\b",
+      "\\bshoplift(ing|er|ers)?\\b",
+      "\\bgrab and run\\b",
+      "\\bpocket(ed|ing)?\\b",
+      "\\brob(bing|bed|ber|bers|bery|beries)\\b",
+      "\\bburglar(y|ies|s)?\\b",
+      "\\bsnatch(ed|ing|er)?\\b",
+      "\\bpickpocket(ing|ed|er|s)?\\b",
+      "\\bloot(ing|er|ers|ed)\\b"
+    ],
     "severity": "high",
     "cooldown_secs": 0
+  },
+  "sexual_misconduct": {
+    "synonyms": ["sexual harassment", "sexually harassing", "inappropriate touching", "inappropriate contact", "groping", "groped", "indecent exposure", "exposed himself", "exposed herself", "nudity", "nude", "public exposure", "molestation", "molesting", "lewd act", "unwanted touching"],
+    "regex": [
+      "\\bsexual(ly)? (harass(ment|ing|ed)?|assault(ing|ed)?|misconduct|abuse|abusing|abused)\\b",
+      "\\binappropriate (touching|contact|behaviou?r|act)\\b",
+      "\\bgrop(e|ed|ing|er)\\b",
+      "\\bindecent exposure\\b",
+      "\\bexpos(ed|ing) (himself|herself|themselves|genital)\\b",
+      "\\b(nudity|nude|naked) (in public|exposure)?\\b",
+      "\\bmolest(ation|ing|ed|er)\\b",
+      "\\blewd (act|behaviou?r|gesture|conduct)\\b",
+      "\\bunwanted (touching|contact|advance|advances)\\b"
+    ],
+    "severity": "critical",
+    "cooldown_secs": 0
+  },
+  "public_disorder": {
+    "synonyms": ["disturbance", "disorderly conduct", "disturbing the peace", "shouting match", "yelling", "screaming", "verbal abuse", "verbal altercation", "arguing", "heated argument", "verbal threat"],
+    "regex": [
+      "\\bdisturbance\\b",
+      "\\bdisorderly (conduct|behaviou?r)\\b",
+      "\\bdisturbing the peace\\b",
+      "\\bshouting match\\b",
+      "\\b(yell|scream|shout)(ing|ed) (at|loudly|aggressively)\\b",
+      "\\bverbal (abuse|altercation|assault|attack|threat)\\b",
+      "\\b(arguing|argument) (loudly|aggressively|heatedly)\\b",
+      "\\bheated (argument|exchange|confrontation|dispute)\\b",
+      "\\bverbally (threaten(ing|ed)|abusing|abused)\\b"
+    ],
+    "severity": "high",
+    "cooldown_secs": 60
+  },
+  "threats_intimidation": {
+    "synonyms": ["death threat", "threatening gesture", "pointing at", "intimidating", "intimidation", "stalking", "following someone", "threatening posture", "threatening tone"],
+    "regex": [
+      "\\bdeath threat(s|ened|ening)?\\b",
+      "\\bthreatening (gesture|posture|stance|tone|manner|behaviou?r)\\b",
+      "\\bintimidat(e|ing|ed|ion)\\b",
+      "\\bstalk(ing|ed|er)\\b",
+      "\\bfollow(ing|ed) (someone|the (man|woman|person|individual|victim))\\b",
+      "\\bpointing (at|toward|towards) (someone|the (man|woman|person|individual|victim))\\b",
+      "\\bcornered (a|the|someone)\\b"
+    ],
+    "severity": "high",
+    "cooldown_secs": 60
+  },
+  "general_safety_concern": {
+    "synonyms": ["concerning behaviour", "concerning behavior", "alarming behaviour", "alarming behavior", "hostile behaviour", "hostile behavior", "erratic behaviour", "erratic behavior", "altercation"],
+    "regex": [
+      "(?<!no )(?<!not )(?<!without )safety (concern|incident|risk|threat|hazard|issue)\\b",
+      "(?<!no )(?<!not )(?<!without )security (concern|incident|breach|threat)\\b",
+      "\\bconcerning (behaviou?r|action|act|situation|activity|conduct)\\b",
+      "\\balarming (behaviou?r|situation|scene|event|action)\\b",
+      "\\bhostile (behaviou?r|act|stance|encounter|environment)\\b",
+      "\\berratic (behaviou?r|movement|action|conduct)\\b",
+      "\\b(scared|frightened|terrified) (looking|individual|person|crowd|people)\\b",
+      "\\b(potential|possible|likely) (threat|altercation|fight|assault|attack|robbery|theft)\\b",
+      "\\bdangerous (situation|behaviou?r|act|action)\\b"
+    ],
+    "severity": "high",
+    "cooldown_secs": 60
   }
 }

@@ -1,203 +1,1670 @@
-<!-- <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Video Summarizer</title>
-</head>
-<body>
-    <h1>Upload Video for Summarization</h1>
-    {% if error %}
-        <p style="color:red;">{{ error }}</p>
-    {% endif %}
-    <form method="post" enctype="multipart/form-data">
-        <label>Select Video:</label><br>
-        <input type="file" name="video" accept="video/*" required><br><br>
-
-        <label>Prompt:</label><br>
-        <textarea name="prompt" rows="4" cols="60" required placeholder="What do you want to analyze?"></textarea><br><br>
-
-        <button type="submit">Summarize Video</button>
-    </form>
-
-    {% if summary %}
-        <h2>Prompt</h2>
-        <p>{{ prompt }}</p>
-        <h2>Summary</h2>
-        <p>{{ summary }}</p>
-    {% endif %}
-</body>
-</html> -->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Video Summary with Ollama</title>
+  <title>Oculume — Video & Multi-Camera Dashboard</title>
   <style>
+    :root {
+      --bg: #0b1e3b;
+      --panel: #112d54;
+      --panel-2: #0e2649;
+      --line: #1f3a66;
+      --accent: #1f4ea3;
+      --accent-2: #3a6edb;
+      --teal: #25a18e;
+      --muted: #9bb1d3;
+      --text: #ffffff;
+      --warn: #e6a23c;
+      --danger: #d35a5a;
+    }
+
+    * { box-sizing: border-box; }
     body {
-      background-color: #0b1e3b;
-      color: #ffffff;
-      font-family: Arial, sans-serif;
-      padding: 40px;
+      margin: 0;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
     }
 
-    .logo-container {
-      position: absolute;
-      top: 20px;
-      right: 30px;
+    /* ---------- Top bar ---------- */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 28px;
+      background: var(--panel-2);
+      border-bottom: 1px solid var(--line);
     }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand h1 { font-size: 26px; margin: 0; font-weight: 700; letter-spacing: 0.2px; }
+    .brand img { height: 36px; width: auto; }
 
-    .logo-container img {
-      height: 80px;
-      width: auto;
+    /* ---------- Tabs ---------- */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      padding: 0 28px;
+      background: #163864;
+      border-bottom: 1px solid var(--line);
     }
-
-    h1, h2 {
-      color: #ffffff;
+    .tab-button {
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      padding: 14px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
     }
-
-    form {
-      margin-bottom: 30px;
+    .tab-button:hover { color: var(--text); }
+    .tab-button.active {
+      color: var(--text);
+      border-bottom-color: var(--accent-2);
     }
+    .tab-panel { display: none; padding: 28px; }
+    .tab-panel.active { display: block; }
 
-    label {
-      display: block;
-      margin-top: 15px;
-      font-weight: bold;
-    }
-
-    input[type="file"], textarea {
+    h2, h3 { margin: 0 0 12px; }
+    label { display: block; margin-top: 12px; font-weight: 600; color: var(--muted); font-size: 13px; }
+    input[type="file"], textarea, input[type="text"] {
       width: 100%;
-      padding: 8px;
-      margin-top: 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background-color: #ffffff;
-      color: #000000;
+      padding: 8px 10px;
+      margin-top: 6px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      color: #000;
+      font-size: 14px;
     }
-
-    textarea::placeholder {
-      color: #888;
-    }
-
-    button {
-      padding: 10px 20px;
-      font-size: 16px;
-      background-color: #1f4ea3;
+    button.primary {
+      padding: 10px 18px;
+      font-size: 14px;
+      background-color: var(--accent);
       color: white;
       border: none;
-      border-radius: 5px;
+      border-radius: 6px;
       cursor: pointer;
-      margin-top: 15px;
+      margin-top: 14px;
+      font-weight: 600;
+    }
+    button.primary:hover { background-color: var(--accent-2); }
+    button.ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    button.ghost.active { color: var(--text); border-color: var(--accent-2); }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 18px;
     }
 
-    button:hover {
-      background-color: #3a6edb;
-    }
-
-    p {
-      background-color: #112d54;
+    /* ---------- Summarization tab specifics (kept compatible) ---------- */
+    p.summary-block {
+      background-color: var(--panel);
       padding: 15px;
-      border-radius: 5px;
+      border-radius: 6px;
       line-height: 1.6;
       white-space: pre-wrap;
     }
-
     .download-btn {
       margin-top: 15px;
       display: inline-block;
-      background-color: #25a18e;
+      background-color: var(--teal);
       padding: 10px 15px;
       color: white;
       text-decoration: none;
       border-radius: 5px;
     }
+    .download-btn:hover { background-color: #1e877a; }
 
-    .download-btn:hover {
-      background-color: #1e877a;
+    /* ---------- Severity filter ---------- */
+    .frames-filter {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 10px 0 16px;
+    }
+    .frames-filter .label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-right: 4px;
+    }
+    .filter-chip {
+      background: transparent;
+      border: 1px solid currentColor;
+      padding: 4px 12px;
+      border-radius: 14px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: background 0.15s ease, opacity 0.15s ease;
+      font-family: inherit;
+    }
+    .filter-chip:not(.active) { opacity: 0.4; }
+    .filter-chip.critical { color: #ff8585; }
+    .filter-chip.high     { color: var(--warn); }
+    .filter-chip.moderate { color: #80a8ff; }
+    .filter-chip.low      { color: var(--muted); }
+    .filter-chip.critical.active { background: rgba(211, 90, 90, 0.22); }
+    .filter-chip.high.active     { background: rgba(230, 162, 60, 0.22); }
+    .filter-chip.moderate.active { background: rgba(58, 110, 219, 0.22); }
+    .filter-chip.low.active      { background: rgba(155, 177, 211, 0.14); }
+
+    /* ---------- Reported frame gallery ---------- */
+    .frames-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+    @media (max-width: 1500px) { .frames-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    @media (max-width: 1200px) { .frames-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 800px)  { .frames-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 500px)  { .frames-grid { grid-template-columns: 1fr; } }
+    .frame-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: visible;
+      position: relative;
+    }
+    .frame-thumb {
+      position: relative;
+      height: 150px;
+      background: #000;
+      border-radius: 8px 8px 0 0;
+      overflow: visible;
+    }
+    .frame-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      border-radius: 8px 8px 0 0;
+      transition: transform 0.25s ease, box-shadow 0.25s ease, z-index 0s 0.25s;
+      transform-origin: center center;
+      position: relative;
+      z-index: 1;
+    }
+    .frame-thumb:hover img {
+      transform: scale(2.2);
+      z-index: 50;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+      border-radius: 6px;
+      transition: transform 0.25s ease, box-shadow 0.25s ease, z-index 0s;
+    }
+    .frame-meta {
+      padding: 10px 12px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .frame-meta .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .frame-meta .ts {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .frame-meta .sev {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .frame-meta .sev.critical { background: rgba(211,90,90,0.25); color: #ff8585; }
+    .frame-meta .sev.high     { background: rgba(230,162,60,0.25); color: var(--warn); }
+    .frame-meta .sev.moderate { background: rgba(58,110,219,0.22); color: #80a8ff; }
+    .frame-meta .sev.low      { background: rgba(155,177,211,0.15); color: var(--muted); }
+    .frame-meta .labels {
+      font-size: 11px;
+      color: #80a8ff;
+      font-weight: 600;
+    }
+    .frame-meta .desc {
+      font-size: 13px;
+      line-height: 1.45;
+      color: #d8e4f7;
     }
 
-    /* Spinner Styles */
-    #loading-spinner {
-      display: none;
-      margin-top: 20px;
+    /* ---------- Follow-up Q&A ---------- */
+    .followup-box {
+      display: flex;
+      gap: 10px;
+      margin-top: 6px;
+      align-items: flex-end;
+    }
+    .followup-box textarea {
+      flex: 1;
+      margin-top: 0;
+    }
+    .followup-box button {
+      margin-top: 0;
+      flex-shrink: 0;
+    }
+    .followup-history {
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .qa-item {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .qa-item .qa-q {
+      color: #80a8ff;
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    .qa-item .qa-a {
+      font-size: 14px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      color: #e6eefb;
+    }
+    .qa-item.pending .qa-a { color: var(--muted); font-style: italic; }
+
+    /* ---------- Upload row + render-finished card ---------- */
+    .upload-row {
+      display: flex;
+      gap: 24px;
+      align-items: stretch;
+      flex-wrap: wrap;
+    }
+    .upload-row > .card {
+      flex: 1 1 520px;
+      max-width: 800px;
+    }
+    .ready-card {
+      flex: 1 1 320px;
+      min-width: 280px;
+      max-width: 460px;
+      background:
+        radial-gradient(ellipse at center, rgba(34,227,163,0.10) 0%, rgba(11,30,59,0) 65%),
+        #07111f;
+      border: 1px solid rgba(34,227,163,0.22);
+      border-radius: 14px;
+      padding: 32px 26px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
       text-align: center;
+      box-shadow: 0 0 60px rgba(34,227,163,0.05) inset;
     }
+    .ready-check-wrap {
+      position: relative;
+      width: 140px;
+      height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 6px;
+    }
+    .ready-check-wrap .pulse {
+      position: absolute;
+      inset: 18px;
+      border-radius: 50%;
+      border: 2px solid rgba(34,227,163,0.55);
+      animation: ready-pulse 2.6s ease-out infinite;
+      pointer-events: none;
+    }
+    .ready-check-wrap .pulse.p2 { animation-delay: 0.85s; }
+    .ready-check-wrap .pulse.p3 { animation-delay: 1.7s; }
+    @keyframes ready-pulse {
+      0%   { transform: scale(0.55); opacity: 0.9; }
+      80%  { opacity: 0; }
+      100% { transform: scale(1.45); opacity: 0; }
+    }
+    .ready-check-circle {
+      width: 96px;
+      height: 96px;
+      border: 3px solid #22e3a3;
+      border-radius: 50%;
+      background: radial-gradient(circle at center, rgba(34,227,163,0.20) 0%, transparent 75%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      box-shadow: 0 0 30px rgba(34,227,163,0.45),
+                  0 0 8px rgba(34,227,163,0.6) inset;
+      z-index: 1;
+    }
+    .ready-check-circle svg {
+      width: 52px;
+      height: 52px;
+      stroke: #22e3a3;
+      stroke-width: 3.2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 4px rgba(34,227,163,0.7));
+      stroke-dasharray: 28;
+      stroke-dashoffset: 28;
+      animation: ready-check-draw 0.7s ease forwards 0.25s;
+    }
+    @keyframes ready-check-draw {
+      to { stroke-dashoffset: 0; }
+    }
+    .ready-tag {
+      color: #22e3a3;
+      letter-spacing: 0.18em;
+      font-size: 12px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .ready-title {
+      font-size: 26px;
+      font-weight: 700;
+      margin: 2px 0 4px;
+      color: #ffffff;
+    }
+    .ready-title em {
+      color: #22e3a3;
+      font-style: normal;
+    }
+    .ready-sub {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+      max-width: 300px;
+      margin: 0;
+    }
+    .ready-card.dismissed {
+      opacity: 0;
+      transform: scale(0.96);
+      transition: opacity 0.45s ease, transform 0.45s ease;
+      pointer-events: none;
+    }
+    .ready-card.gone { display: none; }
 
+    /* ---------- Results row: frames (main) + follow-up (sidebar) ---------- */
+    .results-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 0.42fr);
+      gap: 24px;
+      margin-top: 24px;
+      align-items: start;
+    }
+    @media (max-width: 1100px) {
+      .results-row { grid-template-columns: 1fr; }
+    }
+    .results-main { min-width: 0; }
+    .results-side { min-width: 0; }
+    .results-side h2 { margin-top: 0; }
+    .results-side .followup-box { flex-direction: column; align-items: stretch; }
+    .results-side .followup-box button { width: 100%; }
+
+    /* Spinner */
+    #loading-spinner { display: none; margin-top: 20px; text-align: center; }
     .spinner {
       border: 6px solid #f3f3f3;
-      border-top: 6px solid #1f4ea3;
+      border-top: 6px solid var(--accent);
       border-radius: 50%;
-      width: 50px;
-      height: 50px;
+      width: 50px; height: 50px;
       animation: spin 1s linear infinite;
       margin: 0 auto 10px;
     }
+    @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+    .processing-message { font-style: italic; color: #ccc; }
 
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+    /* ---------- Person Tracking layout ---------- */
+    .tracking-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr 320px;
+      gap: 18px;
+    }
+    @media (max-width: 1200px) {
+      .tracking-grid { grid-template-columns: 1fr; }
     }
 
-    .processing-message {
-      font-style: italic;
-      color: #ccc;
+    .poi-thumb {
+      width: 100%;
+      aspect-ratio: 3/4;
+      background: #0a1a33;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 13px;
+      overflow: hidden;
+    }
+    .poi-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+    .floor-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .view-toggle {
+      margin-left: auto;
+      display: flex;
+      gap: 4px;
+      background: var(--panel-2);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+    }
+
+    /* SVG floor plan */
+    #floor-stage {
+      background: #0a1a33;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      width: 100%;
+      height: 420px;
+      display: block;
+    }
+    .zone-rect { fill: rgba(31, 78, 163, 0.10); stroke: var(--line); stroke-width: 1; }
+    .zone-rect.active { fill: rgba(58, 110, 219, 0.25); stroke: var(--accent-2); }
+    .zone-label { fill: var(--muted); font-size: 12px; font-weight: 600; }
+    .cam-dot { fill: var(--muted); stroke: var(--bg); stroke-width: 2; cursor: pointer; }
+    .cam-dot.entrance { fill: var(--teal); }
+    .cam-dot.visited { fill: var(--accent-2); }
+    .cam-label { fill: var(--muted); font-size: 10px; pointer-events: none; }
+    .path-line { fill: none; stroke: var(--accent-2); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
+    .path-line.preview { stroke-dasharray: 6 4; opacity: 0.4; }
+    .person-dot { fill: #ffd166; stroke: #1a1a1a; stroke-width: 2; filter: drop-shadow(0 0 6px rgba(255,209,102,0.8)); }
+
+    /* 3D placeholder */
+    #threejs-stage {
+      display: none;
+      width: 100%;
+      height: 420px;
+      background: linear-gradient(180deg, #0a1a33 0%, #06122a 100%);
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      position: relative;
+      overflow: hidden;
+    }
+    #threejs-stage .stub {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      text-align: center;
+      padding: 0 30px;
+    }
+    #threejs-stage .stub code {
+      background: rgba(255,255,255,0.05);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #d4e3ff;
+    }
+
+    /* Timeline */
+    .timeline {
+      margin-top: 14px;
+      max-height: 220px;
+      overflow-y: auto;
+      border-top: 1px solid var(--line);
+    }
+    .timeline-row {
+      display: grid;
+      grid-template-columns: 80px 70px 1fr 60px;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 4px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .timeline-row:hover { background: rgba(58, 110, 219, 0.08); }
+    .timeline-row.active { background: rgba(58, 110, 219, 0.18); }
+    .timeline-row .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .timeline-row .cam { font-weight: 600; }
+    .timeline-row .zone { color: var(--muted); }
+    .timeline-row .score { color: var(--teal); text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* Candidates */
+    .candidate {
+      display: grid;
+      grid-template-columns: 56px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .candidate:hover { border-color: var(--accent-2); }
+    .candidate.selected { border-color: var(--accent-2); background: rgba(58, 110, 219, 0.15); }
+    .candidate img { width: 56px; height: 72px; object-fit: cover; border-radius: 4px; }
+    .candidate .meta { font-size: 13px; }
+    .candidate .meta .id { font-weight: 700; }
+    .candidate .meta .sim { color: var(--muted); font-size: 12px; }
+    .candidate .badge {
+      background: var(--teal);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .stat-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+    .stat {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      padding: 8px 12px;
+      border-radius: 8px;
+      flex: 1 1 120px;
+      min-width: 120px;
+    }
+    .stat .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat .value { font-size: 18px; font-weight: 700; }
+
+    .muted { color: var(--muted); font-size: 12px; }
+
+    /* ---------- Camera footage uploader ---------- */
+    .footage-card { margin-bottom: 18px; }
+    .footage-card .row {
+      display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    }
+    .clip-table {
+      width: 100%; margin-top: 12px; border-collapse: collapse;
+    }
+    .clip-table th, .clip-table td {
+      text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line);
+      font-size: 13px;
+    }
+    .clip-table th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .clip-table select {
+      background: #fff; color: #000; border: 1px solid var(--line);
+      border-radius: 5px; padding: 4px 8px;
+    }
+    .pill {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 700;
+    }
+    .pill.ok   { background: rgba(37,161,142,0.2); color: #6fe2c9; }
+    .pill.miss { background: rgba(155,177,211,0.15); color: var(--muted); }
+    .registry-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 8px; margin-top: 12px;
+    }
+    .registry-chip {
+      background: var(--panel-2); border: 1px solid var(--line);
+      border-radius: 6px; padding: 6px 8px; font-size: 12px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .registry-chip .x {
+      background: transparent; color: var(--muted); border: none; cursor: pointer;
+      font-size: 14px; padding: 0 4px;
+    }
+    .registry-chip .x:hover { color: var(--danger); }
+
+    /* ---------- Stitched player ---------- */
+    .player-wrap {
+      margin-top: 14px; background: #000; border-radius: 10px;
+      overflow: hidden; position: relative;
+    }
+    .player-wrap video { width: 100%; display: block; max-height: 360px; background: #000; }
+    .player-overlay {
+      position: absolute; top: 10px; left: 10px;
+      background: rgba(11,30,59,0.85); padding: 6px 10px;
+      border-radius: 6px; font-size: 12px; pointer-events: none;
+    }
+    .player-overlay .cam { font-weight: 700; }
+    .player-overlay .t { color: var(--muted); margin-left: 6px; }
+    .player-controls {
+      display: flex; align-items: center; gap: 8px; padding: 10px 4px;
+      flex-wrap: wrap;
+    }
+    .player-controls .progress {
+      flex: 1 1 200px; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden;
+    }
+    .player-controls .progress .bar { height: 100%; background: var(--accent-2); width: 0%; transition: width 0.2s; }
+    .player-empty {
+      padding: 30px 20px; text-align: center; color: var(--muted); font-size: 13px;
     }
   </style>
 </head>
 <body>
-  <h1>Upload Video for Summary</h1>
-  <form method="POST" enctype="multipart/form-data" id="upload-form">
-    <label for="video">Choose a video file:</label>
-    <input type="file" name="video" accept="video/*" required>
 
-    <label for="prompt">Optional Custom Prompt:</label>
-    <textarea name="prompt" rows="4" placeholder="Enter your custom prompt here..."></textarea>
-
-    <button type="submit" id="submit-button">Upload & Summarize</button>
-
-    <!-- Loading Spinner -->
-    <div id="loading-spinner">
-      <div class="spinner"></div>
-      <div class="processing-message">Processing your video, please wait...</div>
+  <!-- ============ Top bar ============ -->
+  <div class="topbar">
+    <div class="brand">
+      <img src="{{ url_for('static', filename='logo.png') }}" alt="Oculume">
+      <h1>Oculume Insight Hub</h1>
     </div>
-  </form>
-
-  <div class="logo-container">
-    <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo">
+    <div class="muted">Privacy-aware on-prem analytics</div>
   </div>
 
-  {% if summary %}
-    <h2>📝 Summary:</h2>
-    <p>{{ summary }}</p>
-    {% if pdf_file %}
-      <a href="{{ url_for('download_pdf', filename=pdf_file) }}" class="download-btn" download>
-        📄 Download Summary as PDF
-      </a>
+  <!-- ============ Tab strip ============ -->
+  <div class="tabs">
+    <button class="tab-button active" data-tab="summary">Video Summarization</button>
+    <button class="tab-button" data-tab="tracking">Person Tracking</button>
+  </div>
+
+  <!-- ============ Tab 1: existing summarization workflow ============ -->
+  <div id="tab-summary" class="tab-panel active">
+    <div class="upload-row">
+      <div class="card">
+        <h2>Upload Video for Summary</h2>
+        <form method="POST" enctype="multipart/form-data" id="upload-form">
+          <label for="video">Choose a video file</label>
+          <input type="file" name="video" accept="video/*" required>
+
+          <label for="prompt">Optional custom prompt</label>
+          <textarea name="prompt" rows="4" placeholder="Enter your custom prompt here..."></textarea>
+
+          <button type="submit" id="submit-button" class="primary">Upload &amp; Summarize</button>
+
+          <div id="loading-spinner">
+            <div class="spinner"></div>
+            <div class="processing-message">Processing your video, please wait...</div>
+          </div>
+        </form>
+      </div>
+
+      {% if summary %}
+        <div class="ready-card" role="status" aria-live="polite">
+          <div class="ready-check-wrap">
+            <div class="pulse"></div>
+            <div class="pulse p2"></div>
+            <div class="pulse p3"></div>
+            <div class="ready-check-circle">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <polyline points="5 12.5 10.5 18 19 7"></polyline>
+              </svg>
+            </div>
+          </div>
+          <div class="ready-tag">RENDER FINISHED</div>
+          <h2 class="ready-title">Your video is <em>ready</em></h2>
+          <p class="ready-sub">Processing completed successfully. Everything looks good and your file is ready to download.</p>
+        </div>
+        <script>
+          // Auto-dismiss the "render finished" banner 2s after it appears.
+          setTimeout(function () {
+            const card = document.querySelector(".ready-card");
+            if (!card) return;
+            card.classList.add("dismissed");
+            setTimeout(function () { card.classList.add("gone"); }, 500);
+          }, 2000);
+        </script>
+      {% endif %}
+    </div>
+
+    {% if summary %}
+      <h2 style="margin-top: 24px;">Summary</h2>
+      <p class="summary-block">{{ summary }}</p>
+      {% if pdf_file %}
+        <a href="{{ url_for('download_pdf', filename=pdf_file) }}" class="download-btn" download>
+          Download Summary as PDF
+        </a>
+      {% endif %}
+
+      {% if frames or session_id %}
+        <div class="results-row">
+          <div class="results-main">
+            {% if frames %}
+              <h2 style="margin-top: 28px;">Reported Frames</h2>
+              <p class="muted" style="margin: 0 0 8px;">Hover any thumbnail to magnify.</p>
+              <div class="frames-filter" id="frames-filter">
+                <span class="label">Filter</span>
+                <button type="button" class="filter-chip critical active" data-sev="critical">Critical</button>
+                <button type="button" class="filter-chip high active"     data-sev="high">High</button>
+                <button type="button" class="filter-chip moderate active" data-sev="moderate">Moderate</button>
+                <button type="button" class="filter-chip low active"      data-sev="low">Low</button>
+              </div>
+              <div class="frames-grid" id="frames-grid">
+                {% for f in frames %}
+                  <div class="frame-card" data-sev="{{ f.severity }}">
+                    <div class="frame-thumb">
+                      <img src="{{ f.image }}" alt="frame {{ f.t }}">
+                    </div>
+                    <div class="frame-meta">
+                      <div class="top">
+                        <span class="ts">{{ f.t }}</span>
+                        <span class="sev {{ f.severity }}">{{ f.severity }}</span>
+                      </div>
+                      {% if f.labels %}
+                        <div class="labels">{{ f.labels }}</div>
+                      {% endif %}
+                      <div class="desc">{{ f.text }}</div>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+              <script>
+                (function () {
+                  const chips = document.querySelectorAll("#frames-filter .filter-chip");
+                  const cards = document.querySelectorAll("#frames-grid .frame-card");
+                  if (!chips.length || !cards.length) return;
+                  function apply() {
+                    const active = new Set();
+                    chips.forEach(c => { if (c.classList.contains("active")) active.add(c.dataset.sev); });
+                    cards.forEach(card => {
+                      const sev = (card.dataset.sev || "low").toLowerCase();
+                      card.style.display = active.has(sev) ? "" : "none";
+                    });
+                  }
+                  chips.forEach(c => c.addEventListener("click", () => {
+                    c.classList.toggle("active");
+                    apply();
+                  }));
+                })();
+              </script>
+            {% endif %}
+          </div>
+
+          {% if session_id %}
+            <div class="results-side">
+              <h2 style="margin-top: 28px;">Ask a Follow-up</h2>
+              <p class="muted" style="margin: 0 0 8px;">
+                Ask more questions about <b>{{ source_filename }}</b> — answers come from the cached frame observations, no re-processing.
+              </p>
+              <div class="followup-box">
+                <textarea id="followup-question" rows="3"
+                          placeholder="e.g. did the person take anything with him?"></textarea>
+                <button class="primary" id="followup-ask">Ask</button>
+              </div>
+              <div id="followup-history" class="followup-history"></div>
+              <script>
+                (function() {
+                  const sid = {{ session_id|tojson }};
+                  const askBtn = document.getElementById("followup-ask");
+                  const inp = document.getElementById("followup-question");
+                  const hist = document.getElementById("followup-history");
+                  function escapeHTML(s) {
+                    return String(s).replace(/[&<>'"]/g, c => ({
+                      "&": "&amp;", "<": "&lt;", ">": "&gt;",
+                      "'": "&#39;", '"': "&quot;"
+                    }[c]));
+                  }
+                  async function ask() {
+                    const q = inp.value.trim();
+                    if (!q) return;
+                    askBtn.disabled = true;
+                    const orig = askBtn.textContent;
+                    askBtn.textContent = "Thinking…";
+                    const pending = document.createElement("div");
+                    pending.className = "qa-item pending";
+                    pending.innerHTML = `<div class="qa-q">${escapeHTML(q)}</div><div class="qa-a">Thinking…</div>`;
+                    hist.prepend(pending);
+                    inp.value = "";
+                    try {
+                      const res = await fetch("/ask", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ session_id: sid, question: q })
+                      });
+                      const body = await res.json();
+                      pending.classList.remove("pending");
+                      pending.querySelector(".qa-a").textContent =
+                        body.answer || body.error || "(no answer returned)";
+                    } catch (err) {
+                      pending.classList.remove("pending");
+                      pending.querySelector(".qa-a").textContent = "Request failed: " + err;
+                    } finally {
+                      askBtn.disabled = false;
+                      askBtn.textContent = orig;
+                    }
+                  }
+                  askBtn.addEventListener("click", ask);
+                  inp.addEventListener("keydown", e => {
+                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) ask();
+                  });
+                })();
+              </script>
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+    {% elif error %}
+      <h2 style="color: var(--danger); margin-top: 24px;">Error</h2>
+      <p class="summary-block">{{ error }}</p>
     {% endif %}
-  {% elif error %}
-    <h2 style="color: red;">Error:</h2>
-    <p>{{ error }}</p>
-  {% else %}
-    <p>No summary available yet. Please upload a video to get started.</p>
-  {% endif %}
 
-  {% if prompt %}
-    <h2>Prompt:</h2>
-    <p>{{ prompt }}</p>
-  {% endif %}
+    {% if prompt %}
+      <h2 style="margin-top: 24px;">Prompt</h2>
+      <p class="summary-block">{{ prompt }}</p>
+    {% endif %}
+  </div>
 
-  {% if video_url %}
-    <h2>Video URL:</h2>
-    <p><a href="{{ video_url }}" target="_blank">{{ video_url }}</a></p>
-  {% endif %}
+  <!-- ============ Tab 2: Person Tracking ============ -->
+  <div id="tab-tracking" class="tab-panel">
 
-  <!-- JavaScript to handle spinner -->
+    <!-- ---- Camera footage uploader (building-wide setup) ---- -->
+    <div class="card footage-card">
+      <div class="row" style="justify-content: space-between;">
+        <div>
+          <h3 style="margin:0;">Camera Footage Library</h3>
+          <p class="muted" style="margin:4px 0 0;">
+            Upload one clip per camera. The dashboard stitches them into a single timeline
+            following the person-of-interest's journey.
+          </p>
+        </div>
+        <div class="row">
+          <label style="margin:0; font-weight: 700;">
+            <input type="file" id="footage-files" accept="video/*" multiple style="display:none;">
+            <span class="primary" style="padding: 8px 14px; border-radius: 6px; cursor:pointer; background: var(--accent); display:inline-block;">+ Add clips</span>
+          </label>
+          <button class="primary" id="footage-upload" style="margin: 0;" disabled>Upload &amp; map</button>
+          <button class="ghost" id="load-demo-feeds" style="padding: 8px 14px;">Load demo feeds</button>
+        </div>
+      </div>
+
+      <!-- Per-file camera mapping table (only shown after files are picked) -->
+      <table class="clip-table" id="clip-table" style="display:none;">
+        <thead>
+          <tr><th>File</th><th>Size</th><th>Map to camera</th></tr>
+        </thead>
+        <tbody id="clip-table-body"></tbody>
+      </table>
+
+      <!-- Add a live feed / remote URL against a single camera -->
+      <div class="row" style="margin-top: 14px; gap: 8px;">
+        <select id="feed-camera" style="background:#fff; color:#000; border:1px solid var(--line); border-radius:5px; padding:6px 10px; min-width:200px;">
+          <option value="">— pick camera —</option>
+        </select>
+        <input type="text" id="feed-url" placeholder="https://stream.example.com/feed.m3u8  or  https://.../clip.mp4"
+               style="flex:1 1 320px; margin-top:0;">
+        <button class="primary" id="feed-add" style="margin:0; padding:8px 14px;" disabled>+ Add feed URL</button>
+      </div>
+
+      <!-- Already-uploaded clip / feed registry -->
+      <div class="registry-grid" id="registry-grid"></div>
+    </div>
+
+    <div class="tracking-grid">
+
+      <!-- ---- LEFT: Person of interest search ---- -->
+      <div class="card">
+        <h3>Person of Interest</h3>
+        <div class="poi-thumb" id="poi-thumb">
+          <span>Drop an image<br>or pick from gallery</span>
+        </div>
+        <label>Upload query image</label>
+        <input type="file" id="poi-file" accept="image/*">
+        <label>Or describe</label>
+        <input type="text" id="poi-text" placeholder="dark hoodie, black backpack">
+        <button class="primary" id="poi-search" style="width:100%;">Search across cameras</button>
+
+        <div class="stat-row">
+          <div class="stat">
+            <div class="label">Cameras</div>
+            <div class="value" id="stat-cams">—</div>
+          </div>
+          <div class="stat">
+            <div class="label">Floors</div>
+            <div class="value" id="stat-floors">—</div>
+          </div>
+        </div>
+        <p class="muted" style="margin-top:12px;">
+          Faces are never stored. Identity is built from clothing, body shape, and motion
+          features that stay on this device.
+        </p>
+      </div>
+
+      <!-- ---- CENTER: floor plan + timeline ---- -->
+      <div class="card">
+        <div class="floor-toolbar">
+          <h3 style="margin:0;">Journey on the building</h3>
+          <div id="floor-buttons" style="display:flex; gap:6px; margin-left:16px;"></div>
+
+          <!-- Upload a custom floor plan image for the current floor -->
+          <label style="margin:0;">
+            <input type="file" id="map-file" accept=".svg,.png,.jpg,.jpeg,.webp,image/*" style="display:none;">
+            <span class="ghost" style="padding: 6px 12px; cursor:pointer; display:inline-block;" id="map-pick-btn">Upload map</span>
+          </label>
+          <select id="map-target" class="ghost" style="background:#fff; color:#000; border:1px solid var(--line); border-radius:6px; padding:5px 8px;">
+            <option value="current">Current floor</option>
+            <option value="ALL">All floors</option>
+          </select>
+          <button class="ghost" id="map-reset" title="Revert this floor to the default plan">Reset map</button>
+
+          <div class="view-toggle">
+            <button class="ghost active" id="view-2d">2D Plan</button>
+            <button class="ghost" id="view-3d">3D View</button>
+          </div>
+        </div>
+
+        <svg id="floor-stage" viewBox="0 0 1000 360" preserveAspectRatio="xMidYMid meet"></svg>
+
+        <!-- 3D-ready stage. Stays empty in prototype; same data shape feeds Three.js later. -->
+        <div id="threejs-stage">
+          <div class="stub">
+            <div style="font-size:18px; font-weight:700; margin-bottom:8px;">3D view hook</div>
+            <div>Drop a Three.js scene into <code>#threejs-canvas</code>.</div>
+            <div style="margin-top:6px;">It receives the same JSON from <code>/api/tracking/building</code> +
+              <code>/api/tracking/journey/&lt;id&gt;</code> — cameras use <code>pos3d</code>, floors use <code>level</code>.</div>
+            <canvas id="threejs-canvas" style="display:none;"></canvas>
+          </div>
+        </div>
+
+        <!-- Stitched playback: plays each appearance's clip / live feed in journey order -->
+        <div class="player-wrap" id="player-wrap">
+          <div class="player-empty" id="player-empty">
+            Select a candidate and upload clips for at least one of its cameras to begin stitched playback.
+          </div>
+          <video id="player-video" controls style="display:none; max-height:360px; width:100%;"></video>
+          <img    id="player-mjpeg" style="display:none; max-height:360px; width:100%; object-fit:contain; background:#000;" alt="live feed">
+          <div class="player-overlay" id="player-overlay" style="display:none;">
+            <span class="cam" id="overlay-cam">—</span>
+            <span class="t" id="overlay-t">—</span>
+            <span class="pill" id="overlay-live" style="display:none; background:#d35a5a; color:#fff; margin-left:6px;">● LIVE</span>
+          </div>
+        </div>
+        <div class="player-controls">
+          <button class="ghost" id="play-prev">◀ Prev clip</button>
+          <button class="primary" id="play-stitched" style="margin:0; padding:6px 14px;">▶ Play journey</button>
+          <button class="ghost" id="play-next">Next clip ▶</button>
+          <div class="progress"><div class="bar" id="play-progress"></div></div>
+          <div class="muted" id="play-status">Idle</div>
+        </div>
+
+        <div class="timeline" id="timeline"></div>
+      </div>
+
+      <!-- ---- RIGHT: candidates ---- -->
+      <div class="card">
+        <h3>Match Candidates</h3>
+        <p class="muted">Ranked by feature similarity, filtered by camera-network reachability.</p>
+        <div id="candidates"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Spinner JS for the summarization tab -->
   <script>
-    document.getElementById("upload-form").addEventListener("submit", function() {
+    document.getElementById("upload-form").addEventListener("submit", function () {
       document.getElementById("submit-button").disabled = true;
       document.getElementById("loading-spinner").style.display = "block";
     });
+
+    // ---------- Tab switching ----------
+    document.querySelectorAll(".tab-button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-button").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+        if (btn.dataset.tab === "tracking" && !window.__trackingLoaded) {
+          loadTracking();
+        }
+      });
+    });
+  </script>
+
+  <!-- ============ Person Tracking logic ============ -->
+  <script>
+    // State
+    let BUILDING = null;
+    let JOURNEY  = null;
+    let CANDS    = [];
+    let CLIP_REG = {};       // camera_id -> clip URL
+    let CURRENT_FLOOR = "1F";
+    let CURRENT_CAND  = null;
+    let ACTIVE_APPEARANCE = 0;
+    let PENDING_FILES = [];  // [{file, camera_id}]
+
+    async function loadTracking() {
+      window.__trackingLoaded = true;
+      try {
+        const [b, g, z, reg] = await Promise.all([
+          fetch("/api/tracking/building").then(r => r.json()),
+          fetch("/api/tracking/gallery").then(r => r.json()),
+          fetch("/api/tracking/zone_counts").then(r => r.json()),
+          fetch("/api/tracking/clips").then(r => r.json()),
+        ]);
+        BUILDING = b;
+        CLIP_REG = reg || {};
+        document.getElementById("stat-cams").textContent =
+          BUILDING.floors.reduce((s, f) => s + f.cameras.length, 0);
+        document.getElementById("stat-floors").textContent = BUILDING.floors.length;
+        buildFloorButtons();
+        renderFloor();
+        renderRegistry();
+        populateFeedCameraSelect();
+      } catch (err) {
+        console.error("Tracking load failed", err);
+        alert("Could not load tracking data. Is the Flask app running?");
+      }
+    }
+
+    // ---------- Camera options (used by upload mapping) ----------
+    function allCameras() {
+      return BUILDING ? BUILDING.floors.flatMap(f => f.cameras) : [];
+    }
+
+    function buildFloorButtons() {
+      const host = document.getElementById("floor-buttons");
+      host.innerHTML = "";
+      BUILDING.floors.forEach(f => {
+        const btn = document.createElement("button");
+        btn.className = "ghost" + (f.id === CURRENT_FLOOR ? " active" : "");
+        btn.textContent = f.name;
+        btn.onclick = () => { CURRENT_FLOOR = f.id; buildFloorButtons(); renderFloor(); };
+        host.appendChild(btn);
+      });
+    }
+
+    function getFloor(id) { return BUILDING.floors.find(f => f.id === id); }
+
+    function renderFloor() {
+      const svg = document.getElementById("floor-stage");
+      const floor = getFloor(CURRENT_FLOOR);
+      svg.innerHTML = "";
+      svg.setAttribute("viewBox", `0 0 ${floor.plan.width} ${floor.plan.height}`);
+
+      // ---- Floor plan image (default sample.svg or user upload) ----
+      if (floor.floor_plan_url) {
+        const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
+        img.setAttribute("href", floor.floor_plan_url);
+        img.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", floor.floor_plan_url);
+        img.setAttribute("x", 0);
+        img.setAttribute("y", 0);
+        img.setAttribute("width",  floor.plan.width);
+        img.setAttribute("height", floor.plan.height);
+        img.setAttribute("preserveAspectRatio", "xMidYMid slice");
+        svg.appendChild(img);
+      }
+
+      // ---- Zone overlays (translucent so the map shows through) ----
+      const activeZones = new Set(
+        (JOURNEY ? JOURNEY.appearances : [])
+          .filter(a => a.floor === CURRENT_FLOOR)
+          .map(a => a.zone)
+      );
+      floor.zones.forEach(z => {
+        const pts = z.polygon.map(p => p.join(",")).join(" ");
+        const poly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+        poly.setAttribute("points", pts);
+        poly.setAttribute("class", "zone-rect" + (activeZones.has(z.id) ? " active" : ""));
+        svg.appendChild(poly);
+
+        const cx = z.polygon.reduce((s, p) => s + p[0], 0) / z.polygon.length;
+        const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        txt.setAttribute("x", cx);
+        txt.setAttribute("y", z.polygon[0][1] + 22);
+        txt.setAttribute("text-anchor", "middle");
+        txt.setAttribute("class", "zone-label");
+        txt.textContent = `${z.id} · ${z.name}`;
+        svg.appendChild(txt);
+      });
+
+      // Cameras
+      const visited = new Set(
+        (JOURNEY ? JOURNEY.appearances : []).map(a => a.camera)
+      );
+      floor.cameras.forEach(cam => {
+        const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        dot.setAttribute("cx", cam.pos2d[0]);
+        dot.setAttribute("cy", cam.pos2d[1]);
+        dot.setAttribute("r", 8);
+        let cls = "cam-dot";
+        if (cam.type === "entrance") cls += " entrance";
+        if (visited.has(cam.id))     cls += " visited";
+        dot.setAttribute("class", cls);
+        dot.setAttribute("title", cam.label);
+        svg.appendChild(dot);
+
+        const lbl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        lbl.setAttribute("x", cam.pos2d[0] + 12);
+        lbl.setAttribute("y", cam.pos2d[1] + 4);
+        lbl.setAttribute("class", "cam-label");
+        lbl.textContent = cam.id;
+        svg.appendChild(lbl);
+      });
+
+      // Journey path on this floor
+      if (JOURNEY) {
+        const camById = {};
+        floor.cameras.forEach(c => { camById[c.id] = c; });
+        const onFloor = JOURNEY.appearances.filter(a => a.floor === CURRENT_FLOOR);
+        if (onFloor.length > 1) {
+          const d = onFloor.map((a, i) => {
+            const c = camById[a.camera]; if (!c) return null;
+            return (i === 0 ? "M" : "L") + c.pos2d[0] + " " + c.pos2d[1];
+          }).filter(Boolean).join(" ");
+          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          path.setAttribute("d", d);
+          path.setAttribute("class", "path-line");
+          svg.appendChild(path);
+        }
+
+        // Person marker at the active appearance (if on this floor)
+        const active = JOURNEY.appearances[ACTIVE_APPEARANCE];
+        if (active && active.floor === CURRENT_FLOOR && camById[active.camera]) {
+          const c = camById[active.camera];
+          const p = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          p.setAttribute("cx", c.pos2d[0]);
+          p.setAttribute("cy", c.pos2d[1] - 18);
+          p.setAttribute("r", 7);
+          p.setAttribute("class", "person-dot");
+          svg.appendChild(p);
+        }
+      }
+    }
+
+    function renderTimeline() {
+      const host = document.getElementById("timeline");
+      host.innerHTML = "";
+      if (!JOURNEY) {
+        host.innerHTML = '<div class="muted" style="padding:14px;">Run a search to reconstruct a journey.</div>';
+        return;
+      }
+      JOURNEY.appearances.forEach((a, i) => {
+        const row = document.createElement("div");
+        row.className = "timeline-row" + (i === ACTIVE_APPEARANCE ? " active" : "");
+        row.innerHTML = `
+          <div class="t">${a.t}</div>
+          <div class="cam">${a.camera}</div>
+          <div class="zone">${a.floor} · ${a.zone}</div>
+          <div class="score">${(a.score * 100).toFixed(0)}%</div>`;
+        row.onclick = () => {
+          ACTIVE_APPEARANCE = i;
+          if (a.floor !== CURRENT_FLOOR) {
+            CURRENT_FLOOR = a.floor;
+            buildFloorButtons();
+          }
+          renderFloor();
+          renderTimeline();
+        };
+        host.appendChild(row);
+      });
+    }
+
+    function renderCandidates() {
+      const host = document.getElementById("candidates");
+      host.innerHTML = "";
+      if (!CANDS.length) {
+        host.innerHTML = '<div class="muted">Search to see ranked candidates.</div>';
+        return;
+      }
+      CANDS.forEach(c => {
+        const row = document.createElement("div");
+        row.className = "candidate" + (CURRENT_CAND === c.track_id ? " selected" : "");
+        row.innerHTML = `
+          <img src="${c.thumb}" alt="${c.track_id}">
+          <div class="meta">
+            <div class="id">${c.track_id}</div>
+            <div class="sim">similarity</div>
+          </div>
+          <div class="badge">${(c.similarity * 100).toFixed(0)}%</div>`;
+        row.onclick = () => selectCandidate(c.track_id);
+        host.appendChild(row);
+      });
+    }
+
+    async function selectCandidate(track_id) {
+      CURRENT_CAND = track_id;
+      ACTIVE_APPEARANCE = 0;
+      try {
+        JOURNEY = await fetch("/api/tracking/journey/" + encodeURIComponent(track_id))
+                          .then(r => r.json());
+        if (JOURNEY.appearances && JOURNEY.appearances.length) {
+          CURRENT_FLOOR = JOURNEY.appearances[0].floor;
+        }
+      } catch (err) {
+        console.warn("No journey for", track_id);
+        JOURNEY = null;
+      }
+      buildFloorButtons();
+      renderFloor();
+      renderTimeline();
+      renderCandidates();
+      resetPlayer();
+    }
+
+    async function runSearch() {
+      const text = document.getElementById("poi-text").value || "";
+      const file = document.getElementById("poi-file").files[0];
+      const body = { query_id: "user_upload", text };
+      try {
+        const res = await fetch("/api/tracking/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }).then(r => r.json());
+        CANDS = res.candidates || [];
+        renderCandidates();
+        if (CANDS.length) selectCandidate(CANDS[0].track_id);
+      } catch (err) {
+        alert("Search failed: " + err);
+      }
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = e => {
+          document.getElementById("poi-thumb").innerHTML =
+            `<img src="${e.target.result}" alt="query">`;
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    document.getElementById("poi-search").addEventListener("click", runSearch);
+
+    // 2D / 3D view toggle. 3D pane stays a stub: it reads the SAME JSON, so
+    // a Three.js scene can be dropped into #threejs-canvas without API changes.
+    document.getElementById("view-2d").addEventListener("click", () => {
+      document.getElementById("view-2d").classList.add("active");
+      document.getElementById("view-3d").classList.remove("active");
+      document.getElementById("floor-stage").style.display = "block";
+      document.getElementById("threejs-stage").style.display = "none";
+    });
+    document.getElementById("view-3d").addEventListener("click", () => {
+      document.getElementById("view-3d").classList.add("active");
+      document.getElementById("view-2d").classList.remove("active");
+      document.getElementById("floor-stage").style.display = "none";
+      document.getElementById("threejs-stage").style.display = "block";
+    });
+
+    // ============================================================
+    // Camera footage upload + per-camera mapping
+    // ============================================================
+    function guessCameraFromFilename(name) {
+      const lower = name.toLowerCase();
+      const cams = allCameras();
+      // exact match first ("Cam7.mp4"), then fuzzy contains
+      for (const c of cams) {
+        if (lower.includes(c.id.toLowerCase())) return c.id;
+      }
+      return "";
+    }
+
+    function renderClipTable() {
+      const tbody = document.getElementById("clip-table-body");
+      const table = document.getElementById("clip-table");
+      tbody.innerHTML = "";
+      if (!PENDING_FILES.length) { table.style.display = "none"; return; }
+      table.style.display = "table";
+
+      const cams = allCameras();
+      PENDING_FILES.forEach((entry, idx) => {
+        const tr = document.createElement("tr");
+        const sizeKb = (entry.file.size / 1024).toFixed(0);
+        const size = sizeKb > 1024 ? (sizeKb / 1024).toFixed(1) + " MB" : sizeKb + " KB";
+        tr.innerHTML = `
+          <td>${entry.file.name}</td>
+          <td class="muted">${size}</td>
+          <td>
+            <select data-idx="${idx}">
+              <option value="">— pick camera —</option>
+              ${cams.map(c =>
+                `<option value="${c.id}" ${c.id === entry.camera_id ? "selected" : ""}>${c.id} · ${c.label}</option>`
+              ).join("")}
+            </select>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll("select").forEach(sel => {
+        sel.addEventListener("change", e => {
+          const i = parseInt(e.target.dataset.idx, 10);
+          PENDING_FILES[i].camera_id = e.target.value;
+          document.getElementById("footage-upload").disabled =
+            !PENDING_FILES.some(f => f.camera_id);
+        });
+      });
+      document.getElementById("footage-upload").disabled =
+        !PENDING_FILES.some(f => f.camera_id);
+    }
+
+    function renderRegistry() {
+      const host = document.getElementById("registry-grid");
+      host.innerHTML = "";
+      const entries = Object.entries(CLIP_REG);
+      if (!entries.length) {
+        host.innerHTML = '<div class="muted">No camera clips or feeds registered yet. Try <b>Load demo feeds</b>.</div>';
+        return;
+      }
+      entries.forEach(([cam, url]) => {
+        const chip = document.createElement("div");
+        chip.className = "registry-chip";
+        const isRemote = url.startsWith("http://") || url.startsWith("https://");
+        const tag = isRemote ? "FEED" : "FILE";
+        const display = isRemote ? url.replace(/^https?:\/\//, "") : url.split("/").pop();
+        chip.innerHTML = `
+          <span><span class="pill ok">${cam}</span>
+            <span class="muted" style="margin-left:6px;" title="${url}">${tag} · ${display.length > 22 ? display.slice(0, 22) + "…" : display}</span>
+          </span>
+          <button class="x" title="Remove">×</button>`;
+        chip.querySelector(".x").addEventListener("click", async () => {
+          await fetch("/api/tracking/clips/" + encodeURIComponent(cam), { method: "DELETE" })
+            .then(r => r.json())
+            .then(res => { CLIP_REG = res.registry || {}; renderRegistry(); refreshJourneyClips(); });
+        });
+        host.appendChild(chip);
+      });
+    }
+
+    function populateFeedCameraSelect() {
+      const sel = document.getElementById("feed-camera");
+      sel.innerHTML = '<option value="">— pick camera —</option>';
+      allCameras().forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c.id;
+        opt.textContent = `${c.id} · ${c.label}`;
+        sel.appendChild(opt);
+      });
+    }
+
+    document.getElementById("footage-files").addEventListener("change", e => {
+      const files = Array.from(e.target.files || []);
+      PENDING_FILES = files.map(f => ({ file: f, camera_id: guessCameraFromFilename(f.name) }));
+      renderClipTable();
+    });
+
+    // ---- Demo feeds: bulk-load public sample MP4s onto every demo camera ----
+    document.getElementById("load-demo-feeds").addEventListener("click", async () => {
+      const btn = document.getElementById("load-demo-feeds");
+      btn.disabled = true;
+      const orig = btn.textContent;
+      btn.textContent = "Loading…";
+      try {
+        const res = await fetch("/api/tracking/load_demo_feeds", { method: "POST" })
+                          .then(r => r.json());
+        CLIP_REG = res.registry || {};
+        renderRegistry();
+        await refreshJourneyClips();
+      } catch (err) {
+        alert("Demo feed load failed: " + err);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = orig;
+      }
+    });
+
+    // ---- Add a single live feed URL (HLS, MP4, etc.) against a camera ----
+    function updateFeedAddBtn() {
+      const cam = document.getElementById("feed-camera").value;
+      const url = document.getElementById("feed-url").value.trim();
+      const ok = cam && (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/"));
+      document.getElementById("feed-add").disabled = !ok;
+    }
+    document.getElementById("feed-camera").addEventListener("change", updateFeedAddBtn);
+    document.getElementById("feed-url").addEventListener("input", updateFeedAddBtn);
+
+    // ---- Floor-plan map upload ----
+    document.getElementById("map-file").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const target = document.getElementById("map-target").value;
+      const floor_id = target === "ALL" ? "ALL" : CURRENT_FLOOR;
+      const fd = new FormData();
+      fd.append("floor_id", floor_id);
+      fd.append("file", file, file.name);
+      try {
+        await fetch("/api/tracking/upload_map", { method: "POST", body: fd })
+                .then(r => r.json());
+        // Re-fetch building so the new floor_plan_url is picked up
+        BUILDING = await fetch("/api/tracking/building").then(r => r.json());
+        renderFloor();
+      } catch (err) {
+        alert("Map upload failed: " + err);
+      } finally {
+        e.target.value = "";
+      }
+    });
+
+    document.getElementById("map-reset").addEventListener("click", async () => {
+      try {
+        await fetch("/api/tracking/floor_plans/" + encodeURIComponent(CURRENT_FLOOR),
+                    { method: "DELETE" }).then(r => r.json());
+        BUILDING = await fetch("/api/tracking/building").then(r => r.json());
+        renderFloor();
+      } catch (err) {
+        alert("Map reset failed: " + err);
+      }
+    });
+
+    document.getElementById("feed-add").addEventListener("click", async () => {
+      const cam = document.getElementById("feed-camera").value;
+      const url = document.getElementById("feed-url").value.trim();
+      if (!cam || !url) return;
+      try {
+        const res = await fetch("/api/tracking/add_feed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ camera_id: cam, url }),
+        }).then(r => r.json());
+        CLIP_REG = res.registry || {};
+        document.getElementById("feed-url").value = "";
+        document.getElementById("feed-camera").value = "";
+        updateFeedAddBtn();
+        renderRegistry();
+        await refreshJourneyClips();
+      } catch (err) {
+        alert("Add feed failed: " + err);
+      }
+    });
+
+    document.getElementById("footage-upload").addEventListener("click", async () => {
+      const fd = new FormData();
+      let count = 0;
+      PENDING_FILES.forEach(entry => {
+        if (entry.camera_id) {
+          fd.append("clip_" + entry.camera_id, entry.file, entry.file.name);
+          count++;
+        }
+      });
+      if (!count) return;
+      const btn = document.getElementById("footage-upload");
+      btn.disabled = true; btn.textContent = "Uploading...";
+      try {
+        const res = await fetch("/api/tracking/upload_clips", { method: "POST", body: fd })
+                          .then(r => r.json());
+        CLIP_REG = res.registry || {};
+        PENDING_FILES = [];
+        document.getElementById("footage-files").value = "";
+        renderClipTable();
+        renderRegistry();
+        await refreshJourneyClips();
+      } catch (err) {
+        alert("Upload failed: " + err);
+      } finally {
+        btn.disabled = false; btn.textContent = "Upload & map";
+      }
+    });
+
+    // After the registry changes, re-fetch the current journey so its
+    // appearances pick up newly-mapped clip URLs.
+    async function refreshJourneyClips() {
+      if (!CURRENT_CAND) return;
+      JOURNEY = await fetch("/api/tracking/journey/" + encodeURIComponent(CURRENT_CAND))
+                        .then(r => r.json());
+      renderFloor();
+      renderTimeline();
+      resetPlayer();
+    }
+
+    // ============================================================
+    // Stitched playback engine
+    // Plays each appearance's mapped clip in journey order. On clip end,
+    // auto-advances; floor/timeline/person-dot stay in sync.
+    // ============================================================
+    const video   = document.getElementById("player-video");
+    const mjpeg   = document.getElementById("player-mjpeg");
+    const overlay = document.getElementById("player-overlay");
+    const liveBadge = document.getElementById("overlay-live");
+    const empty   = document.getElementById("player-empty");
+    const bar     = document.getElementById("play-progress");
+    const status  = document.getElementById("play-status");
+    let LIVE_TIMER = null;
+    const LIVE_SECONDS_PER_CAMERA = 6; // how long to dwell on each live feed before auto-advancing
+
+    function playlistIndices() {
+      if (!JOURNEY) return [];
+      return JOURNEY.appearances
+        .map((a, i) => a.clip_url ? i : -1)
+        .filter(i => i >= 0);
+    }
+
+    function stopLiveTimer() {
+      if (LIVE_TIMER) { clearTimeout(LIVE_TIMER); LIVE_TIMER = null; }
+    }
+
+    function resetPlayer() {
+      stopLiveTimer();
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+      video.style.display = "none";
+      mjpeg.removeAttribute("src");
+      mjpeg.style.display = "none";
+      overlay.style.display = "none";
+      liveBadge.style.display = "none";
+      bar.style.width = "0%";
+      const has = playlistIndices().length;
+      if (!JOURNEY) {
+        empty.style.display = "block";
+        empty.textContent = "Select a candidate to build a journey.";
+        status.textContent = "Idle";
+      } else if (!has) {
+        empty.style.display = "block";
+        empty.textContent = `No clips or feeds mapped for the ${JOURNEY.appearances.length} cameras on this journey. Upload a clip, add a feed URL, or click Load demo feeds.`;
+        status.textContent = "No clips mapped";
+      } else {
+        empty.style.display = "none";
+        status.textContent = `${has} of ${JOURNEY.appearances.length} appearances have clips/feeds`;
+      }
+    }
+
+    function playAppearance(idx) {
+      if (!JOURNEY) return;
+      const a = JOURNEY.appearances[idx];
+      if (!a) return;
+      stopLiveTimer();
+      ACTIVE_APPEARANCE = idx;
+      if (a.floor !== CURRENT_FLOOR) {
+        CURRENT_FLOOR = a.floor;
+        buildFloorButtons();
+      }
+      renderFloor();
+      renderTimeline();
+
+      if (!a.clip_url) {
+        // skip forward to the next appearance that has a clip
+        const next = JOURNEY.appearances.findIndex((x, i) => i > idx && x.clip_url);
+        if (next >= 0) return playAppearance(next);
+        status.textContent = "Reached end (no more clips)";
+        return;
+      }
+      empty.style.display = "none";
+      overlay.style.display = "block";
+      document.getElementById("overlay-cam").textContent = a.camera;
+      document.getElementById("overlay-t").textContent = `${a.floor} · ${a.zone} · ${a.t}`;
+      liveBadge.style.display = a.is_live ? "inline-block" : "none";
+
+      if (a.is_live) {
+        // MJPEG: <video> can't decode multipart/x-mixed-replace,
+        // so use <img>. Auto-advance after a fixed dwell window.
+        video.pause();
+        video.style.display = "none";
+        mjpeg.style.display = "block";
+        // Bust any prior cache so the stream restarts
+        mjpeg.src = a.clip_url + (a.clip_url.includes("?") ? "&" : "?") + "_=" + Date.now();
+        status.textContent = `Live ${a.camera} (auto-advance in ${LIVE_SECONDS_PER_CAMERA}s)`;
+        // Drive the progress bar manually for live segments
+        const startT = Date.now();
+        const playable = playlistIndices();
+        const cur = Math.max(0, playable.indexOf(idx));
+        const tick = () => {
+          if (ACTIVE_APPEARANCE !== idx) return;
+          const localPct = Math.min(1, (Date.now() - startT) / (LIVE_SECONDS_PER_CAMERA * 1000));
+          bar.style.width = (((cur + localPct) / playable.length) * 100).toFixed(1) + "%";
+          if (localPct < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+        LIVE_TIMER = setTimeout(() => {
+          const playable = playlistIndices();
+          const cur = playable.indexOf(idx);
+          if (cur >= 0 && cur < playable.length - 1) {
+            playAppearance(playable[cur + 1]);
+          } else {
+            status.textContent = "Journey playback complete";
+          }
+        }, LIVE_SECONDS_PER_CAMERA * 1000);
+      } else {
+        mjpeg.removeAttribute("src");
+        mjpeg.style.display = "none";
+        video.style.display = "block";
+        video.src = a.clip_url;
+        video.play().catch(() => {/* user-gesture required on some browsers */});
+        status.textContent = `Playing appearance ${idx + 1} / ${JOURNEY.appearances.length}`;
+      }
+    }
+
+    function advance(delta) {
+      if (!JOURNEY) return;
+      const playable = playlistIndices();
+      if (!playable.length) return;
+      const cur = playable.indexOf(ACTIVE_APPEARANCE);
+      const next = playable[(cur >= 0 ? cur + delta : 0 + (delta > 0 ? 0 : 0))];
+      if (next === undefined) return;
+      playAppearance(next);
+    }
+
+    video.addEventListener("ended", () => {
+      const playable = playlistIndices();
+      const cur = playable.indexOf(ACTIVE_APPEARANCE);
+      if (cur >= 0 && cur < playable.length - 1) {
+        playAppearance(playable[cur + 1]);
+      } else {
+        status.textContent = "Journey playback complete";
+      }
+    });
+
+    video.addEventListener("timeupdate", () => {
+      if (!video.duration) return;
+      const localPct = video.currentTime / video.duration;
+      // Global progress across the playlist
+      const playable = playlistIndices();
+      if (!playable.length) return;
+      const cur = Math.max(0, playable.indexOf(ACTIVE_APPEARANCE));
+      const pct = ((cur + localPct) / playable.length) * 100;
+      bar.style.width = pct.toFixed(1) + "%";
+    });
+
+    document.getElementById("play-stitched").addEventListener("click", () => {
+      if (!JOURNEY) return;
+      const playable = playlistIndices();
+      if (!playable.length) return;
+      playAppearance(playable[0]);
+    });
+    document.getElementById("play-prev").addEventListener("click", () => advance(-1));
+    document.getElementById("play-next").addEventListener("click", () => advance(+1));
   </script>
 </body>
 </html>
